@@ -1,0 +1,20 @@
+---
+cache: cargo
+dist: xenial
+language: rust
+matrix:
+  allow_failures:
+    - rust: nightly
+  before_cache: 
+    - rm -rf ~/.cargo/registry/index/ # Remove cache files 
+    - rm -f  ./target/.rustc_info.json # Remove more cache files that are recursively brought back upon a triggered build
+    - find ./target/debug -maxdepth 1 -type f -delete # Delete loose files 
+  fast_finish: true
+os: linux
+rust:
+  - stable
+  - beta
+  - nightly
+script:
+  - "cargo build --verbose --all"
+  - "cargo test --verbose --all"
