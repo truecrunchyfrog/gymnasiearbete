@@ -1,2 +1,2 @@
 # gymnasiearbete
-Läs inte mig
+Gymnasiearbetets källkod. För mer information hänvisas till gymnasiearbetets dokument. Där borde allt stå.
