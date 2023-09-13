@@ -14,5 +14,5 @@ os: linux
 rust:
   - stable
 script:
-  - "cargo build --manifest-path .\rust-backend\Cargo.toml --verbose --all"
-  - "cargo test --manifest-path .\rust-backend\Cargo.toml --verbose --all"
+  - "cargo build --manifest-path ./rust-backend/Cargo.toml --verbose --all"
+  - "cargo test --manifest-path ./rust-backend/Cargo.toml --verbose --all"
