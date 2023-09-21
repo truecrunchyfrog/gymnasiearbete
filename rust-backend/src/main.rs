@@ -11,10 +11,10 @@ pub enum Language {
     Bin,
 }
 
-/// Reads the desired language from environment arguments and returns an `Option<Language>`
-/// with `Some(Language)` if an argument was provided with a valid language.
+/// Reads the desired language from environment arguments and returns an [`Option<Language>`]
+/// with [`Some(Language)`] if an argument was provided with a valid language.
 /// 
-/// Returns `None` if no argument was provided, or it was invalid.
+/// Returns [`None`] if no argument was provided, or it was invalid.
 pub fn get_language() -> Option<Language> {
     match env::args().collect::<Vec<_>>() // Get arguments
     .get(1)?.as_str() { // Get second item as string slice. Return None if argument unprovided.
