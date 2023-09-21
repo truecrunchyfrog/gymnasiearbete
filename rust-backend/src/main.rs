@@ -75,7 +75,7 @@ fn run_bin_program() {
 
 fn main() {
     let language = get_language().unwrap_or_else(|| {
-        println!("No language argument provided");
+        println!("No valid language argument provided");
         exit(1)
     });
 
