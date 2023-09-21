@@ -11,22 +11,17 @@ pub enum Language {
     Bin,
 }
 
-pub fn get_language() -> Result<Language, env::VarError> {
-    let args: Vec<_> = env::args().collect();
-    if args.len() > 1 {
-        match String::from(args[1].clone()).as_str() {
-            "python" => {
-                return Ok(Language::Python);
-            }
-            "bin" => {
-                return Ok(Language::Bin);
-            }
-            _ => {
-                return Err(env::VarError::NotPresent);
-            }
-        };
+/// Reads the desired language from environment arguments and returns an `Option<Language>`
+/// with `Some(Language)` if an argument was provided with a valid language.
+/// 
+/// Returns `None` if no argument was provided, or it was invalid.
+pub fn get_language() -> Option<Language> {
+    match env::args().collect::<Vec<_>>() // Get arguments
+    .get(1)?.as_str() { // Get second item as string slice. Return None if argument unprovided.
+        "python" => Some(Language::Python),
+        "bin" => Some(Language::Bin),
+        _ => None
     }
-    return Err(env::VarError::NotPresent);
 }
 
 pub fn write_stdin_to_file(size: &mut usize) -> io::Result<()> {
@@ -79,13 +74,11 @@ fn run_bin_program() {
 }
 
 fn main() {
-    let language = match get_language() {
-        Ok(lang) => lang,
-        Err(err) => {
-            println!("Failed {:?}", err);
-            exit(1)
-        }
-    };
+    let language = get_language().unwrap_or_else(|| {
+        println!("No language argument provided");
+        exit(1)
+    });
+
     match language {
         Language::Bin => run_bin_program(),
         _ => return,
