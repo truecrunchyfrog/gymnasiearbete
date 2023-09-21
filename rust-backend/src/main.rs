@@ -1,14 +1,37 @@
+use std::env;
 use std::fs::File;
-use std::io::Cursor;
-use std::io::Write;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::process::{exit, Command};
 
 const BUFFER_SIZE: usize = 1024;
 
+pub enum Language {
+    C,
+    Python,
+    Bin,
+}
+
+pub fn get_language() -> Result<Language, env::VarError> {
+    let args: Vec<_> = env::args().collect();
+    if args.len() > 1 {
+        match String::from(args[1].clone()).as_str() {
+            "python" => {
+                return Ok(Language::Python);
+            }
+            "bin" => {
+                return Ok(Language::Bin);
+            }
+            _ => {
+                return Err(env::VarError::NotPresent);
+            }
+        };
+    }
+    return Err(env::VarError::NotPresent);
+}
+
 pub fn write_stdin_to_file(size: &mut usize) -> io::Result<()> {
     let mut buffer = vec![0; BUFFER_SIZE];
-    let mut fp = File::create("./binary")?;
+    let mut fp = File::create("./binary.exe")?;
 
     loop {
         match io::stdin().read(&mut buffer) {
@@ -29,13 +52,17 @@ pub fn write_stdin_to_file(size: &mut usize) -> io::Result<()> {
         }
     }
 
+    // Flush the file buffer
+    fp.flush()?;
+
+    // Explicitly drop the File to close it
+    drop(fp);
+
     Ok(())
 }
 
-fn main() {
+fn run_bin_program() {
     let mut size: usize = 0;
-    let output_buffer_size = 1024; // replace with actual buffer size
-    let mut output_buffer = vec![0u8; output_buffer_size];
     match write_stdin_to_file(&mut size) {
         Ok(_) => {}
         Err(e) => eprintln!("Error writing stdin to file: {}", e),
@@ -44,29 +71,23 @@ fn main() {
         println!("Empty binary file, discarding");
         exit(0);
     }
-    let process = Command::new("./binary").output();
+    let output = Command::new("./binary.exe")
+        .output()
+        .expect("Failed to execute the binary");
+    println!("Executing binary inside the sandbox");
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+}
 
-    match process {
-        Ok(output) => {
-            println!("Executing binary inside the sandbox");
-            let mut cursor = Cursor::new(output.stdout);
-            // Read the data as buffers and stream it to stdout
-            loop {
-                let read_bytes = cursor
-                    .read(&mut output_buffer)
-                    .expect("Failed to read the output");
-
-                if read_bytes == 0 {
-                    // EOF
-                    break;
-                }
-                output_buffer[read_bytes] = 0;
-                print!("{}", String::from_utf8_lossy(&output_buffer[..read_bytes]));
-            }
+fn main() {
+    let language = match get_language() {
+        Ok(lang) => lang,
+        Err(err) => {
+            println!("Failed {:?}", err);
+            exit(1)
         }
-        Err(_) => {
-            println!("Failed to execute the binary");
-            exit(-1);
-        }
+    };
+    match language {
+        Language::Bin => run_bin_program(),
+        _ => return,
     }
 }
