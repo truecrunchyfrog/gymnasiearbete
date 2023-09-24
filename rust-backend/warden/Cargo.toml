@@ -1,0 +1,12 @@
+[package]
+name = "warden"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bollard = { version = "0.15.0", features = ["tokio-stream"] }
+futures-util = "0.3.28"
+tokio = { version = "1.32.0", features = ["rt", "macros", "rt-multi-thread", "fs", "net"] }
+tokio-util = "0.7.9"
