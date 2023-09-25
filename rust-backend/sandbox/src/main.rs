@@ -16,8 +16,7 @@ pub enum Language {
 /// 
 /// Returns [`None`] if no argument was provided, or it was invalid.
 pub fn get_language() -> Option<Language> {
-    match env::args().collect::<Vec<_>>() // Get arguments
-    .get(1)?.as_str() { // Get second item as string slice. Return None if argument unprovided.
+    match env::args().nth(1)?.as_str() {
         "python" => Some(Language::Python),
         "bin" => Some(Language::Bin),
         _ => None
@@ -51,11 +50,12 @@ pub fn write_stdin_to_file(size: &mut usize) -> io::Result<()> {
     fp.flush()?;
 
     // Explicitly drop the File to close it
-    drop(fp);
+    drop(fp); // Redundant?
 
     Ok(())
 }
 
+/// Runs a program with the selected language [`Language::Bin`].
 fn run_bin_program() {
     let mut size: usize = 0;
     match write_stdin_to_file(&mut size) {
@@ -81,6 +81,6 @@ fn main() {
 
     match language {
         Language::Bin => run_bin_program(),
-        _ => return,
+        _ => return
     }
 }
