@@ -1,21 +1,27 @@
+use futures::StreamExt;
+use shiplift::tty::TtyChunk;
 use shiplift::{ContainerOptions, Docker};
-use std::{env, process::exit};
+use std::{env, error, process::exit};
 
-async fn start_container(&docker: Docker, image: str) -> Result<container, Box<dyn Error>> {
+async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Error>> {
     let image = env::args()
         .nth(1)
         .expect("You need to specify an image name");
 
+    println!("Trying to start container");
     match docker
         .containers()
         .create(&ContainerOptions::builder(image.as_ref()).build())
         .await
     {
         Ok(info) => {
-            info::start().await;
-            return (Ok(info));
+            let container = docker.containers().get(&info.id);
+            match container.start().await {
+                Ok(_) => Ok(info.id),
+                Err(e) => Err(Box::new(e)),
+            }
         }
-        Err(e) => return Err(e),
+        Err(e) => Err(Box::new(e)),
     }
 }
 
@@ -27,39 +33,45 @@ fn print_chunk(chunk: TtyChunk) {
     }
 }
 
-async fn attach_container(container: Container) {
+async fn attach_container<'a>(
+    docker: Docker,
+    container_id: String,
+) -> Result<(), Box<dyn error::Error>> {
+    println!("Attaching to container");
+    let container = docker.containers().get(&container_id);
     let tty_multiplexer = container.attach().await?;
     let (mut reader, _writer) = tty_multiplexer.split();
-    // TODO
-    // Send a start signal
-
     while let Some(tty_result) = reader.next().await {
-        // We get a response
         match tty_result {
             Ok(chunk) => print_chunk(chunk),
             Err(e) => eprintln!("Error: {}", e),
-        }
-        // TODO send a new message
+        };
     }
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
+    println!("Connection to docker");
     let docker: Docker = Docker::new();
-    let container_name: &str = env::args().nth(1);
+    println!("Connected!");
 
-    let container = start_container(docker, container_name);
-    container.await;
-
-    match container {
-        Some(_) => println!("Container started"),
+    match start_container(docker.clone()).await {
+        Ok(container_id) => match attach_container(docker.clone(), container_id.clone()).await {
+            Ok(_) => {
+                let container = docker.containers().get(&container_id);
+                if let Err(e) = container.stop(None).await {
+                    eprintln!("Error: {}", e);
+                }
+                if let Err(e) = docker.containers().get(&container_id).delete().await {
+                    eprintln!("Error: {}", e)
+                }
+            }
+            Err(e) => eprintln!("Error: {}", e),
+        },
         Err(e) => {
-            println!("Failed to start container! {}", e);
+            eprintln!("Failed to start container: {}", e);
             exit(1);
         }
-    }
-    container.stop().await;
-    if let Err(e) = docker.containers().get(&id).delete().await {
-        eprintln!("Error: {}", e)
     }
 }
