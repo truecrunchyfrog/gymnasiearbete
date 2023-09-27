@@ -7,7 +7,7 @@ async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Er
     let image = env::args()
         .nth(1)
         .expect("You need to specify an image name");
-    pull_image(image.as_str());
+    pull_image(&docker, image.as_str()).await;
     println!("Trying to start container");
     match docker
         .containers()
@@ -25,13 +25,13 @@ async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Er
     }
 }
 
-fn pull_image(image_name: &str) -> Result<(), Box<dyn error::Error>> {
+async fn pull_image(docker: &Docker, image_name: &str) -> Result<(), Box<dyn error::Error>> {
     // Pull image
     let opts = PullOptions::builder()
         .image(&image_name)
         .tag("latest")
         .build();
-    if let Ok(pull_result) = images.pull(&opts).try_collect::<Vec<_>>().await {
+    if let Ok(pull_result) = docker.images().pull(&opts).try_collect::<Vec<_>>().await {
         println!("{:?}", pull_result);
         return Ok(());
     } else {
