@@ -1,6 +1,6 @@
 use futures::StreamExt;
 use shiplift::tty::TtyChunk;
-use shiplift::{ContainerOptions, Docker, PullOptions};
+use shiplift::{ContainerOptions, Docker, Exec, PullOptions};
 use std::{env, error, process::exit};
 
 async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Error>> {
@@ -23,6 +23,15 @@ async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Er
         }
         Err(e) => Err(Box::new(e)),
     }
+}
+
+async fn run_command_in_container<'a>(
+    docker: Docker,
+    command: &str,
+    container_id: &str,
+) -> Result<(), Box<dyn error::Error>> {
+    let exec = Exec::create(&docker, container_id, command).await.unwrap();
+    exec.start();
 }
 
 async fn pull_image(docker: &Docker, image_name: &str) -> Result<(), Box<dyn error::Error>> {
@@ -68,21 +77,25 @@ async fn attach_container<'a>(
 async fn main() {
     println!("Connection to docker");
     let docker: Docker = Docker::new();
+    let command = "while :; do sleep 1; done";
     println!("Connected!");
 
     match start_container(docker.clone()).await {
-        Ok(container_id) => match attach_container(docker.clone(), container_id.clone()).await {
-            Ok(_) => {
-                let container = docker.containers().get(&container_id);
-                if let Err(e) = container.stop(None).await {
-                    eprintln!("Error: {}", e);
+        Ok(container_id) => {
+            run_command_in_container(docker.clone(), command, &container_id).await?;
+            match attach_container(docker.clone(), container_id.clone()).await {
+                Ok(_) => {
+                    let container = docker.containers().get(&container_id);
+                    if let Err(e) = container.stop(None).await {
+                        eprintln!("Error: {}", e);
+                    }
+                    if let Err(e) = docker.containers().get(&container_id).delete().await {
+                        eprintln!("Error: {}", e)
+                    }
                 }
-                if let Err(e) = docker.containers().get(&container_id).delete().await {
-                    eprintln!("Error: {}", e)
-                }
+                Err(e) => eprintln!("Error: {}", e),
             }
-            Err(e) => eprintln!("Error: {}", e),
-        },
+        }
         Err(e) => {
             eprintln!("Failed to start container: {}", e);
             exit(1);
