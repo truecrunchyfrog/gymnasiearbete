@@ -1,23 +1,108 @@
 //! Game logic simulator to express the result of a program solution submission.
 //! This library contains the logic to handle the different events and return the result.
 
+use rand::{rngs::StdRng, SeedableRng, Rng};
+
 const BOARD_WIDTH:  u8 = 8;
 const BOARD_HEIGHT: u8 = 5;
 
 struct Game {
     player: Player,
-    board: Board
+    figures: Vec<Figure>
+}
+
+impl Game {
+    fn new() -> Self {
+        Game {
+            player: Player { orientation: Orientation { x: 0, y: 0, direction: Direction::Down } }, // Default player state.
+            figures: Vec::new()
+        }
+    }
+
+    /// Generates a game scenario based on the seed.
+    fn generate(&mut self, seed: u64) {
+        let mut seed_rng = StdRng::seed_from_u64(seed);
+
+        let difficulty = get_difficulty_from_seed(seed);
+
+        let mut figures_to_add = match difficulty {
+            Difficulty::Novice       => 2,
+            Difficulty::Intermediate => 4,
+            Difficulty::Expert       => 6,
+            Difficulty::Insane       => 7
+        };
+
+        while figures_to_add > 0 {
+            let new_orientation = generate_figure_orientation(&self.figures, &mut seed_rng);
+
+            if new_orientation.is_none() {
+                continue;
+            }
+
+            let new_figure = Figure {
+                kind: FigureKind::Priest, // todo: make some figure kind generator thing
+                orientation: new_orientation.unwrap()
+            };
+
+            self.figures.push(new_figure);
+
+            figures_to_add -= 1;
+        }
+    }
+}
+
+fn generate_figure_orientation(figures: &Vec<Figure>, seeded_rng: &mut StdRng) -> Option<Orientation> {
+    let spawn = Orientation {
+        x: seeded_rng.gen_range(0..BOARD_WIDTH),
+        y: seeded_rng.gen_range(0..BOARD_HEIGHT),
+        direction: Direction::Left
+    };
+
+    for existing_figure in figures {
+        if spawn.distance_to(existing_figure.get_orientation()) < 3 {
+            return None
+        }
+    }
+
+    Some(spawn)
+}
+
+enum Difficulty {
+    Novice,
+    Intermediate,
+    Expert,
+    Insane
+}
+
+fn get_difficulty_from_seed(seed: u64) -> Difficulty {
+    match seed % 4 {
+        0 => Difficulty::Novice,
+        1 => Difficulty::Intermediate,
+        2 => Difficulty::Expert,
+        3 => Difficulty::Insane,
+        _ => unreachable!()
+    }
 }
 
 struct Player {
     orientation: Orientation
 }
 
+/// Stores the location and rotation of an object placed on a board.
 struct Orientation {
     x: u8,
     y: u8,
 
     direction: Direction
+}
+
+impl Orientation {
+    /// Returns the addition of the two catenaries, **NOT** the hypothenuse (which would use sqrt)!
+    /// 
+    /// That way, this is not actually a correct distance, but works for its purpose.
+    fn distance_to(&self, other: &Orientation) -> u8 {
+        self.x.abs_diff(other.x) + self.y.abs_diff(other.y)
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -27,10 +112,6 @@ enum Direction {
     Left,           Right,
 
             Down
-}
-
-struct Board {
-    entities: Vec<Figure>
 }
 
 struct Figure {
