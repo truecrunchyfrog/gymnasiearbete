@@ -6,7 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = "1.5.0"
 futures = "0.3.28"
 futures-core = "0.3.28"
-shiplift = "0.7.0"
+rocket = {version = "0.4.11"}
+shiplift = {version = "0.7.0", default-features = false}
+tempfile = "3.8.0"
 tokio = { version = "1.32.0", features = ["full"] }
+uuid = "1.4.1"

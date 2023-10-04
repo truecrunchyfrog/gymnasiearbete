@@ -1,7 +1,13 @@
+#![feature(proc_macro_hygiene, decl_macro)]
 use futures::StreamExt;
+use futures::TryStreamExt;
+use shiplift::builder::ExecContainerOptions;
 use shiplift::tty::TtyChunk;
 use shiplift::{ContainerOptions, Docker, Exec, PullOptions};
 use std::{env, error, process::exit};
+mod server;
+#[macro_use]
+extern crate rocket;
 
 async fn start_container<'a>(docker: Docker) -> Result<String, Box<dyn error::Error>> {
     let image = env::args()
@@ -30,14 +36,21 @@ async fn run_command_in_container<'a>(
     command: &str,
     container_id: &str,
 ) -> Result<(), Box<dyn error::Error>> {
-    let exec = Exec::create(&docker, container_id, command).await.unwrap();
+    let options = ExecContainerOptions::builder()
+        .cmd(vec![command])
+        .env(vec!["VAR=value"])
+        .attach_stdout(true)
+        .attach_stderr(true)
+        .build();
+    let exec = Exec::create(&docker, container_id, &options).await.unwrap();
     exec.start();
+    return Ok(());
 }
 
 async fn pull_image(docker: &Docker, image_name: &str) -> Result<(), Box<dyn error::Error>> {
     // Pull image
     let opts = PullOptions::builder()
-        .image(&image_name)
+        .image(image_name)
         .tag("latest")
         .build();
     if let Ok(pull_result) = docker.images().pull(&opts).try_collect::<Vec<_>>().await {
@@ -73,8 +86,7 @@ async fn attach_container<'a>(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() {
+async fn run_container() {
     println!("Connection to docker");
     let docker: Docker = Docker::new();
     let command = "while :; do sleep 1; done";
@@ -82,7 +94,7 @@ async fn main() {
 
     match start_container(docker.clone()).await {
         Ok(container_id) => {
-            run_command_in_container(docker.clone(), command, &container_id).await?;
+            run_command_in_container(docker.clone(), command, &container_id).await;
             match attach_container(docker.clone(), container_id.clone()).await {
                 Ok(_) => {
                     let container = docker.containers().get(&container_id);
@@ -101,4 +113,11 @@ async fn main() {
             exit(1);
         }
     }
+}
+
+#[tokio::main]
+async fn main() {
+    rocket::ignite()
+        .mount("/", routes![server::hello, server::test])
+        .launch();
 }
