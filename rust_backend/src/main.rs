@@ -118,6 +118,6 @@ async fn run_container() {
 #[tokio::main]
 async fn main() {
     rocket::ignite()
-        .mount("/", routes![server::hello, server::test])
+        .mount("/", routes![server::hello, server::upload])
         .launch();
 }
