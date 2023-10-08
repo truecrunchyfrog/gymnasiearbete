@@ -5,7 +5,7 @@ FROM debian:stretch
 RUN apt-get update && apt-get install -y gcc g++
 
 # Copy the source code to the Docker container
-COPY . /src
+COPY ./code /src
 
 # Compile the code
 WORKDIR /src
