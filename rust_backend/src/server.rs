@@ -22,9 +22,15 @@ pub async fn upload(mut multipart: Multipart) {
         file.write_all(&data).expect("Failed to write file");
         println!("Length of `{}` is {} bytes", name, data.len());
         let task: Task = Task {
-            task_type: TaskTypes::CreateImage(String::from("Hello")),
+            task_type: TaskTypes::CreateImage(path_str),
         };
+
         task_queue::add_task(task).await;
+
+        let task2: Task = Task {
+            task_type: TaskTypes::StartContainer(String::from("shiplift")),
+        };
+        task_queue::add_task(task2).await;
     }
 }
 

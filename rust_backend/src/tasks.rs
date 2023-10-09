@@ -17,6 +17,7 @@ impl Task {
     pub async fn run_task(&self) {
         match &self.task_type {
             TaskTypes::CreateImage(s) => self.create_image(s).await,
+            TaskTypes::StartContainer(s) => self.start_container(s).await,
             _ => todo!("Unimplemented task"),
         }
     }
@@ -25,6 +26,11 @@ impl Task {
         docker::create_image(file_path)
             .await
             .expect("Failed to create image");
+    }
+    async fn start_container(&self, tag: &str) {
+        docker::start_container(tag)
+            .await
+            .expect("failed to start container");
     }
 }
 
