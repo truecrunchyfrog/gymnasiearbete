@@ -1,5 +1,8 @@
+mod data;
 mod docker;
 mod server;
+mod task_queue;
+mod tasks;
 use axum::{
     routing::{get, post},
     Router,
@@ -9,6 +12,7 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
+    tokio::spawn(async { data::queue_thread().await });
     // initialize tracing
     tracing_subscriber::fmt::init();
 

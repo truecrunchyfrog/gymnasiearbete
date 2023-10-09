@@ -3,6 +3,7 @@ use futures::TryStreamExt;
 use shiplift::builder::ExecContainerOptions;
 use shiplift::tty::TtyChunk;
 use shiplift::{BuildOptions, ContainerOptions, Docker, Exec, PullOptions};
+
 use std::fs::copy;
 use std::path::Path;
 use std::{env, error, process::exit};
@@ -31,6 +32,30 @@ async fn start_container<'a>(
         }
         Err(e) => Err(Box::new(e)),
     }
+}
+
+const DOCKERFILE: &str = "../docker/Dockerfile";
+const USERCODE: &str = "../../docker/code";
+const IMAGETAG: &str = "ShipLift";
+
+pub async fn create_image(file_path: &Path) -> Result<(), shiplift::Error> {
+    let docker: Docker = Docker::new();
+    let options = BuildOptions::builder(DOCKERFILE)
+        .tag(IMAGETAG)
+        .dockerfile("code_image")
+        .build();
+
+    // Copy code into build folder
+    copy(file_path, USERCODE).expect("Failed to copy file");
+
+    let mut stream = docker.images().build(&options);
+    while let Some(build_result) = stream.next().await {
+        match build_result {
+            Ok(_output) => return Ok(()),
+            Err(e) => return Err(e),
+        }
+    }
+    return Ok(());
 }
 
 async fn run_command_in_container<'a>(

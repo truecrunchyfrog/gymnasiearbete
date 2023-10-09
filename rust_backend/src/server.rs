@@ -1,4 +1,5 @@
-use crate::docker;
+use crate::tasks::{Task, TaskTypes};
+use crate::{docker, task_queue};
 use axum::extract::Multipart;
 use std::fs;
 use std::io::Write;
@@ -20,7 +21,10 @@ pub async fn upload(mut multipart: Multipart) {
 
         file.write_all(&data).expect("Failed to write file");
         println!("Length of `{}` is {} bytes", name, data.len());
-        docker::run_container(&upload_dir).await;
+        let task: Task = Task {
+            task_type: TaskTypes::CreateImage(String::from("Hello")),
+        };
+        task_queue::add_task(task).await;
     }
 }
 
