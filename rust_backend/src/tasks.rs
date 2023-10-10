@@ -11,9 +11,16 @@ pub enum TaskTypes {
 
 pub struct Task {
     pub(crate) task_type: TaskTypes,
+    pub dependencies: Vec<Task>,
 }
 
 impl Task {
+    pub fn new(task_type: TaskTypes) -> Self {
+        Self {
+            task_type: task_type,
+            dependencies: vec![],
+        }
+    }
     pub async fn run_task(&self) {
         match &self.task_type {
             TaskTypes::CreateImage(s) => self.create_image(s).await,
@@ -47,7 +54,13 @@ impl<Task> Queue<Task> {
     }
 
     pub fn dequeue(&mut self) -> Task {
-        self.queue.remove(0)
+        let de_task = self.queue.remove(0);
+        for task in self.queue {
+            if let Some(element) = task.dependencies.iter().position(|x| *x == task) {
+                task.dependencies.remove(element);
+            }
+        }
+        return de_task;
     }
     pub fn length(&self) -> usize {
         self.queue.len()
