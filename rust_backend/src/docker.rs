@@ -1,39 +1,37 @@
 use futures::StreamExt;
 use shiplift::tty::TtyChunk;
-use shiplift::{errors::Error, BuildOptions, Docker, Image, ImageCreateOptions};
+use shiplift::{errors::Error, BuildOptions, ContainerOptions, Docker, Image, LogsOptions};
 use std::fs::copy;
 use std::path::Path;
+
 pub async fn start_container(image_tag: &str) -> Result<(), Error> {
-    let docker = Docker::new();
-    let image = get_image(&docker, image_tag).await?;
-
-    // Create and start a container from the image
-    create_and_start_container(&docker, image.id().as_str()).await?;
-
-    Ok(())
-}
-
-async fn get_image(docker: &Docker, image_tag: &str) -> Result<Image, Error> {
-    match docker.images().get(image_tag).inspect().await {
-        Ok(image) => Ok(image),
-        Ok(None) => Err(Error::Custom("Image not found".to_string())), // Handle the case when the image doesn't exist.
-        Err(e) => Err(e), // Pass on the shiplift::Error.
+    let docker: Docker = Docker::new();
+    println!("Starting container!");
+    let container_info = docker
+        .containers()
+        .create(&ContainerOptions::builder(image_tag).build())
+        .await
+        .expect("failed to create container");
+    let container_id = container_info.id;
+    let containers = docker.containers();
+    let container = containers.get(&container_id).start().await;
+    let mut logs_stream = docker
+        .containers()
+        .get(&container_id)
+        .logs(&LogsOptions::builder().stdout(true).stderr(true).build());
+    while let Some(log_result) = logs_stream.next().await {
+        match log_result {
+            Ok(chunk) => print_chunk(chunk),
+            Err(e) => eprintln!("Error: {}", e),
+        }
     }
-}
-
-async fn create_and_start_container(docker: &Docker, image_id: &str) -> Result<(), Error> {
-    // Define container options
-    let create_options = ContainerCreateOptions::builder(image_id)
-        .name("my-container")
-        .build();
-
-    // Create the container
-    let container = docker.containers().create(&create_options).await?;
-
-    // Start the container
-    docker.containers().get(&container.id).start().await?;
-
+    println!("Container done!");
     Ok(())
+}
+async fn get_image<'a>(docker: &'a Docker, image_tag: &str) -> Result<Image<'a>, Error> {
+    let images = docker.images();
+    let image = images.get(image_tag);
+    Ok(image)
 }
 
 const DOCKERFILE: &str = "./docker";
