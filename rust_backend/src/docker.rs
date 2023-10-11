@@ -1,10 +1,13 @@
+extern crate shiplift;
 use futures::StreamExt;
 use shiplift::tty::TtyChunk;
 use shiplift::{errors::Error, BuildOptions, ContainerOptions, Docker, Image, LogsOptions};
 use std::fs::copy;
+use std::fs::remove_file;
 use std::path::Path;
 
 pub async fn start_container(image_tag: &str) -> Result<(), Error> {
+    info!("Starting container with id: {}", &image_tag);
     let docker: Docker = Docker::new();
     println!("Starting container!");
     let container_info = docker
@@ -22,7 +25,7 @@ pub async fn start_container(image_tag: &str) -> Result<(), Error> {
     while let Some(log_result) = logs_stream.next().await {
         match log_result {
             Ok(chunk) => print_chunk(chunk),
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => error!("Error: {}", e),
         }
     }
     println!("Container done!");
@@ -39,9 +42,14 @@ const CONTAINERNAME: &str = "container";
 const USERCODE: &str = "./docker/code";
 const IMAGETAG: &str = "shiplift";
 
-pub async fn create_image(file_path: &Path) -> Result<(), shiplift::Error> {
+pub async fn create_image(file_path: &Path, build_id: &str) -> Result<(), shiplift::Error> {
+    info!(
+        "Creating an image with id: {} from {}",
+        &build_id,
+        &file_path.to_str().unwrap()
+    );
     let docker: Docker = Docker::new();
-    let options = BuildOptions::builder(DOCKERFILE).tag(IMAGETAG).build();
+    let options = BuildOptions::builder(DOCKERFILE).tag(build_id).build();
 
     let destination = format!(
         "{}/{}",
@@ -54,7 +62,7 @@ pub async fn create_image(file_path: &Path) -> Result<(), shiplift::Error> {
             .expect("failed to convert again")
     );
     // Copy code into build folder
-    copy(file_path, destination).expect("Failed to copy file");
+    copy(file_path, &destination).expect("Failed to copy file");
 
     let mut stream = docker.images().build(&options);
     while let Some(build_result) = stream.next().await {
@@ -63,6 +71,7 @@ pub async fn create_image(file_path: &Path) -> Result<(), shiplift::Error> {
             Err(e) => return Err(e),
         }
     }
+    remove_file(&destination).expect("Failed to remove file");
     return Ok(());
 }
 

@@ -1,9 +1,14 @@
+use crate::data::QUEUE;
+use crate::docker;
 use std::path::Path;
 
-use crate::docker;
+pub struct ContanerBuildInfo {
+    pub file_path: String,
+    pub user_id: String,
+}
 
 pub enum TaskTypes {
-    CreateImage(String),
+    CreateImage(ContanerBuildInfo),
     StartContainer(String),
     RemoveContainer(String),
     CreateContainer(String),
@@ -15,12 +20,6 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn new(task_type: TaskTypes) -> Self {
-        Self {
-            task_type: task_type,
-            dependencies: vec![],
-        }
-    }
     pub async fn run_task(&self) {
         match &self.task_type {
             TaskTypes::CreateImage(s) => self.create_image(s).await,
@@ -28,24 +27,40 @@ impl Task {
             _ => todo!("Unimplemented task"),
         }
     }
-    async fn create_image(&self, file_name: &str) {
-        let file_path: &Path = Path::new(file_name);
-        docker::create_image(file_path)
-            .await
-            .expect("Failed to create image");
+
+    async fn create_image(&self, build_info: &ContanerBuildInfo) {
+        #[cfg(unix)]
+        {
+            let file_path: &Path = Path::new(build_info.file_path);
+            docker::create_image(&file_path, &build_info.user_id)
+                .await
+                .expect("Failed to create image");
+        }
+        #[cfg(not(unix))]
+        {
+            error!("Cant create images on windows!");
+        }
     }
+
     async fn start_container(&self, tag: &str) {
-        docker::start_container(tag)
-            .await
-            .expect("failed to start container");
+        #[cfg(unix)]
+        {
+            docker::start_container(tag)
+                .await
+                .expect("failed to start container");
+        }
+        #[cfg(not(unix))]
+        {
+            error!("Cant start container on windows!");
+        }
     }
 }
 
-pub struct Queue<TaskTypes> {
-    queue: Vec<TaskTypes>,
+pub struct Queue<Task> {
+    queue: Vec<Task>,
 }
 
-impl<Task> Queue<Task> {
+impl Queue<Task> {
     pub fn new() -> Self {
         Queue { queue: Vec::new() }
     }
@@ -55,11 +70,6 @@ impl<Task> Queue<Task> {
 
     pub fn dequeue(&mut self) -> Task {
         let de_task = self.queue.remove(0);
-        for task in self.queue {
-            if let Some(element) = task.dependencies.iter().position(|x| *x == task) {
-                task.dependencies.remove(element);
-            }
-        }
         return de_task;
     }
     pub fn length(&self) -> usize {
