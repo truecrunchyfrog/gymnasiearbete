@@ -14,23 +14,26 @@ pub async fn start_container(image_tag: &str) -> Result<(), Error> {
         .containers()
         .create(&ContainerOptions::builder(image_tag).build())
         .await
-        .expect("failed to create container");
-    let container_id = container_info.id;
-    let containers = docker.containers();
-    let container = containers.get(&container_id).start().await;
+        .expect("Failed to create container");
+    
+    let container = docker.containers().get(&container_info.id).start().await;
+
     let mut logs_stream = docker
         .containers()
-        .get(&container_id)
+        .get(&container_info.id)
         .logs(&LogsOptions::builder().stdout(true).stderr(true).build());
+
     while let Some(log_result) = logs_stream.next().await {
         match log_result {
             Ok(chunk) => print_chunk(chunk),
             Err(e) => error!("Error: {}", e),
         }
     }
-    println!("Container done!");
+
+    println!("Container started!");
     Ok(())
 }
+
 async fn get_image<'a>(docker: &'a Docker, image_tag: &str) -> Result<Image<'a>, Error> {
     let images = docker.images();
     let image = images.get(image_tag);
@@ -38,9 +41,9 @@ async fn get_image<'a>(docker: &'a Docker, image_tag: &str) -> Result<Image<'a>,
 }
 
 const DOCKERFILE: &str = "./docker";
-const CONTAINERNAME: &str = "container";
-const USERCODE: &str = "./docker/code";
-const IMAGETAG: &str = "shiplift";
+const CONTAINER_NAME: &str = "container";
+const USER_CODE: &str = "./docker/code";
+const IMAGE_TAG: &str = "shiplift";
 
 pub async fn create_image(file_path: &Path, build_id: &str) -> Result<(), shiplift::Error> {
     info!(
@@ -53,13 +56,13 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<(), shipli
 
     let destination = format!(
         "{}/{}",
-        USERCODE.to_string(),
+        USER_CODE.to_string(),
         file_path
             .to_owned()
             .file_name()
-            .expect("failed to convert")
+            .expect("Failed to convert")
             .to_str()
-            .expect("failed to convert again")
+            .expect("Failed to convert again")
     );
     // Copy code into build folder
     copy(file_path, &destination).expect("Failed to copy file");

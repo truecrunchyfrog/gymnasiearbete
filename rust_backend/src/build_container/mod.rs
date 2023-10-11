@@ -12,6 +12,10 @@ struct BuildInstructions {
 }
 
 async fn build_image(instructions: BuildInstructions) -> Result<bool, shiplift::Error> {
+    //                                                          ^^^^
+    // @SapraZ
+    // what does the Ok Result type represent?
+
     let docker = Docker::new();
     let options = BuildOptions::builder(instructions.path)
         .tag("shiplift")

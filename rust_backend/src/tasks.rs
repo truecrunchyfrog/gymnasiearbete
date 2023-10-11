@@ -38,7 +38,7 @@ impl Task {
         }
         #[cfg(not(unix))]
         {
-            error!("Cant create images on windows!");
+            error!("Cannot create images on Windows!");
         }
     }
 
@@ -47,11 +47,11 @@ impl Task {
         {
             docker::start_container(tag)
                 .await
-                .expect("failed to start container");
+                .expect("Failed to start container");
         }
         #[cfg(not(unix))]
         {
-            error!("Cant start container on windows!");
+            error!("Cannot start container on Windows!");
         }
     }
 }
@@ -64,6 +64,7 @@ impl Queue<Task> {
     pub fn new() -> Self {
         Queue { queue: Vec::new() }
     }
+    
     pub fn enqueue(&mut self, item: Task) {
         self.queue.push(item)
     }
@@ -72,9 +73,11 @@ impl Queue<Task> {
         let de_task = self.queue.remove(0);
         return de_task;
     }
+
     pub fn length(&self) -> usize {
         self.queue.len()
     }
+
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

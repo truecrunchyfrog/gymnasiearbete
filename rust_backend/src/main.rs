@@ -20,11 +20,14 @@ async fn main() {
     let mut builder = Builder::from_default_env();
     builder.filter_level(LevelFilter::Info);
     builder.init();
-    info!("starting up");
+
+    info!("Initializing");
+
     #[cfg(not(unix))]
     {
-        warn!("Warning, running on windows, docker will be unavalible!");
+        warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
+
     info!("Starting task queue thread");
     tokio::spawn(async { data::queue_thread().await });
     // initialize tracing
@@ -40,7 +43,7 @@ async fn main() {
     // run our app with hyper
     // `axum::Server` is a re-export of `hyper::Server`
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    info!("listening on {}", addr);
+    info!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
