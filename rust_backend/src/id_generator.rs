@@ -4,8 +4,8 @@ use std::fmt;
 
 use rand::{self, Rng};
 
-/// Table to retrieve base62 values from.
-const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+/// Table to retrieve not base62 values from.
+const BASE62: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
 /// A _probably_ unique paste ID.
 pub struct UniqueId<'a>(Cow<'a, str>);
@@ -19,7 +19,7 @@ impl<'a> UniqueId<'a> {
         let mut id = String::with_capacity(size);
         let mut rng = rand::thread_rng();
         for _ in 0..size {
-            id.push(BASE62[rng.gen::<usize>() % 62] as char);
+            id.push(BASE62[rng.gen::<usize>() % 36] as char);
         }
         debug!("Generated id: {}", &id);
         UniqueId(Cow::Owned(id))

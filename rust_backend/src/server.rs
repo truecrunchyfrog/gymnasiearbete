@@ -6,12 +6,13 @@ use axum::extract::Multipart;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use uuid::Uuid;
 
 pub async fn upload(mut multipart: Multipart) {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.file_name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
-        let user_id = UniqueId::new(16).to_string();
+        let user_id = format!("{}:{}", UniqueId::new(16), Uuid::new_v4().simple());
         let extention = get_extension_from_filename(&name).unwrap();
         let path_str = format!("./upload/{}.{}", user_id, extention);
         let upload_dir: &Path = Path::new(&path_str);
@@ -34,15 +35,17 @@ pub async fn upload(mut multipart: Multipart) {
             dependencies: vec![],
         };
         info!("Added a task to create an image");
-        task_queue::add_task(task).await;
+        task.add_to_queue().await;
 
         let task2: Task = Task {
             task_type: TaskTypes::StartContainer(user_id),
             dependencies: vec![],
         };
         info!("Added a task to start container");
-        task_queue::add_task(task2).await;
+        task2.add_to_queue().await;
+        break;
     }
+    return;
 }
 
 // basic handler that responds with a static string

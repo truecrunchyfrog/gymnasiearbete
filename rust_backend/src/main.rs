@@ -14,6 +14,11 @@ use axum::{
 use env_logger::{Builder, Env, Logger};
 use log::LevelFilter;
 use std::net::SocketAddr;
+use tokio::task;
+
+async fn start_queue_thread() {
+    data::queue_thread().await;
+}
 
 #[tokio::main]
 async fn main() {
@@ -29,8 +34,9 @@ async fn main() {
     }
 
     info!("Starting task queue thread");
-    tokio::spawn(async { data::queue_thread().await });
-    // initialize tracing
+    tokio::spawn(async {
+        start_queue_thread().await;
+    });
     // tracing_subscriber::fmt::init();
 
     info!("Starting axum router");
