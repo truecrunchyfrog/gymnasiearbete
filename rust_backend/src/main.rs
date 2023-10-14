@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 mod data;
+mod database;
 mod docker;
 mod files;
 mod id_generator;
@@ -33,6 +34,12 @@ async fn main() {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
 
+    info!("Connecting to database!");
+    let mut db = database::connect_to_db()
+        .await
+        .expect("Failed to connect to databse!");
+    info!("Connected!");
+    database::print_users(&db).await;
     info!("Starting task queue thread");
     tokio::spawn(async {
         start_queue_thread().await;
