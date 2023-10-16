@@ -1,39 +1,45 @@
 extern crate shiplift;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use shiplift::tty::TtyChunk;
 use shiplift::{errors::Error, BuildOptions, ContainerOptions, Docker, Image, LogsOptions};
+use shiplift::{ImageListOptions, Network};
+
 use std::fs::copy;
 use std::fs::remove_file;
 use std::path::Path;
+use uuid::Uuid;
 
 const DOCKERFILE: &str = "./docker";
 const CONTAINERNAME: &str = "container";
 const USERCODE: &str = "./docker/code";
 const IMAGETAG: &str = "shiplift";
 
-pub async fn start_container(image_tag: &str) -> Result<(), Error> {
-    info!("Starting container with id: {}", &image_tag);
+pub async fn start_container(image_id: &str) -> Result<(), Error> {
+    info!("Starting container with id: {}", &image_id);
     let docker: Docker = Docker::new();
     println!("Starting container!");
+    // print_all_images(&docker).await;
     let container_info = docker
         .containers()
-        .create(&ContainerOptions::builder(image_tag).build())
+        .create(&ContainerOptions::builder(image_id).build())
         .await
-        .expect("failed to create container");
-    let container_id = container_info.id;
-    let containers = docker.containers();
-    let container = containers.get(&container_id).start().await;
+        .expect("Failed to create container");
+
+    let _ = docker.containers().get(&container_info.id).start().await;
+
     let mut logs_stream = docker
         .containers()
-        .get(&container_id)
+        .get(&container_info.id)
         .logs(&LogsOptions::builder().stdout(true).stderr(true).build());
+
     while let Some(log_result) = logs_stream.next().await {
         match log_result {
             Ok(chunk) => print_chunk(chunk),
             Err(e) => error!("Error: {}", e),
         }
     }
-    println!("Container done!");
+
+    println!("Container started!");
     Ok(())
 }
 
@@ -63,37 +69,56 @@ pub async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), s
     todo!()
 }
 
-pub async fn create_image(file_path: &Path, build_id: &str) -> Result<(), shiplift::Error> {
+async fn get_image<'a>(docker: &'a Docker, image_tag: &str) -> Result<Image<'a>, Error> {
+    let images = docker.images();
+    let image = images.get(image_tag);
+    Ok(image)
+}
+
+pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, shiplift::Error> {
     info!(
         "Creating an image with id: {} from {}",
         &build_id,
         &file_path.to_str().unwrap()
     );
     let docker: Docker = Docker::new();
-    let options = BuildOptions::builder(DOCKERFILE).tag(build_id).build();
-
+    let builder = BuildOptions::builder(DOCKERFILE)
+        .tag(build_id.clone())
+        .build();
     let destination = format!(
         "{}/{}",
-        USERCODE.to_string(),
+        USER_CODE.to_string(),
         file_path
             .to_owned()
             .file_name()
-            .expect("failed to convert")
+            .expect("Failed to convert")
             .to_str()
-            .expect("failed to convert again")
+            .expect("Failed to convert again")
     );
     // Copy code into build folder
     copy(file_path, &destination).expect("Failed to copy file");
 
-    let mut stream = docker.images().build(&options);
+    let mut stream = docker.images().build(&builder);
     while let Some(build_result) = stream.next().await {
         match build_result {
-            Ok(_output) => return Ok(()),
+            Ok(output) => println!("{}", output),
             Err(e) => return Err(e),
         }
     }
     remove_file(&destination).expect("Failed to remove file");
-    return Ok(());
+    info!("Container created, with tag: {}", &build_id);
+    return Ok(build_id.to_string());
+}
+
+async fn print_all_images(docker: &Docker) {
+    let images = &docker
+        .images()
+        .list(&ImageListOptions::default())
+        .await
+        .unwrap();
+    for i in images {
+        println!("Image: id: {} parent: {}", &i.id, &i.parent_id)
+    }
 }
 
 fn print_chunk(chunk: TtyChunk) {
