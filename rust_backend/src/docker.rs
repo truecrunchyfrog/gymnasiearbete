@@ -6,6 +6,11 @@ use std::fs::copy;
 use std::fs::remove_file;
 use std::path::Path;
 
+const DOCKERFILE: &str = "./docker";
+const CONTAINERNAME: &str = "container";
+const USERCODE: &str = "./docker/code";
+const IMAGETAG: &str = "shiplift";
+
 pub async fn start_container(image_tag: &str) -> Result<(), Error> {
     info!("Starting container with id: {}", &image_tag);
     let docker: Docker = Docker::new();
@@ -31,16 +36,32 @@ pub async fn start_container(image_tag: &str) -> Result<(), Error> {
     println!("Container done!");
     Ok(())
 }
-async fn get_image<'a>(docker: &'a Docker, image_tag: &str) -> Result<Image<'a>, Error> {
-    let images = docker.images();
-    let image = images.get(image_tag);
-    Ok(image)
+
+pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplift::Error> {
+    let docker: Docker = Docker::new();
+    stop_container(&docker, container_id)
+        .await
+        .expect("Failed to stop container");
+    remove_container(&docker, container_id)
+        .await
+        .expect("Failed to remove container");
+    remove_image(&docker, image_tag)
+        .await
+        .expect("Failed to remove image");
+    todo!()
 }
 
-const DOCKERFILE: &str = "./docker";
-const CONTAINERNAME: &str = "container";
-const USERCODE: &str = "./docker/code";
-const IMAGETAG: &str = "shiplift";
+pub async fn remove_container(docker: &Docker, container_id: &str) -> Result<(), shiplift::Error> {
+    todo!()
+}
+
+pub async fn remove_image(docker: &Docker, image_tag: &str) -> Result<(), shiplift::Error> {
+    todo!()
+}
+
+pub async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), shiplift::Error> {
+    todo!()
+}
 
 pub async fn create_image(file_path: &Path, build_id: &str) -> Result<(), shiplift::Error> {
     info!(
@@ -80,26 +101,5 @@ fn print_chunk(chunk: TtyChunk) {
         TtyChunk::StdOut(bytes) => println!("Stdout: {}", std::str::from_utf8(&bytes).unwrap()),
         TtyChunk::StdErr(bytes) => eprintln!("Stdout: {}", std::str::from_utf8(&bytes).unwrap()),
         TtyChunk::StdIn(_) => unreachable!(),
-    }
-}
-
-async fn build_image(docker: &Docker, file_path: &Path) {
-    let path: String = "../docker/Dockerfile".to_string();
-    let options = BuildOptions::builder(path)
-        .tag("shiplift_test")
-        .dockerfile("code_image")
-        .build();
-
-    let docker_user_code_path = Path::new("../../docker/code");
-
-    // Copy code into build folder
-    copy(file_path, docker_user_code_path).expect("Failed to copy file");
-
-    let mut stream = docker.images().build(&options);
-    while let Some(build_result) = stream.next().await {
-        match build_result {
-            Ok(output) => println!("{:?}", output),
-            Err(e) => eprintln!("Error: {}", e),
-        }
     }
 }
