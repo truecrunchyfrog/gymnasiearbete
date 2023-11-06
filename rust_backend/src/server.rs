@@ -1,7 +1,5 @@
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
-use crate::tasks::{ContanerBuildInfo, Task, TaskTypes};
-use crate::{docker, task_queue};
 use axum::extract::Multipart;
 use std::fs;
 use std::io::Write;
@@ -27,22 +25,6 @@ pub async fn upload(mut multipart: Multipart) {
 
         file.write_all(&data).expect("Failed to write file");
         info!("File uploaded `{}` and is {} bytes", name, data.len());
-        let task: Task = Task {
-            task_type: TaskTypes::CreateImage(ContanerBuildInfo {
-                file_path: path_str,
-                user_id: user_id.clone(),
-            }),
-            dependencies: vec![],
-        };
-        info!("Added a task to create an image");
-        task.add_to_queue().await;
-
-        let task2: Task = Task {
-            task_type: TaskTypes::StartContainer(user_id),
-            dependencies: vec![],
-        };
-        info!("Added a task to start container");
-        task2.add_to_queue().await;
         break;
     }
     return;

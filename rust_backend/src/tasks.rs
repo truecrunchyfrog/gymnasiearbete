@@ -1,95 +1,95 @@
-use crate::data::QUEUE;
-use crate::docker;
-use crate::task_queue::add_task;
-use std::path::Path;
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
 
-pub struct ContanerBuildInfo {
-    pub file_path: String,
-    pub user_id: String,
+trait Task: Send + Sync {
+    fn execute(&self);
+    fn dependencies(&self) -> Vec<Box<dyn Task>>;
 }
 
-pub enum TaskTypes {
-    RunCode(String),
-    CreateImage(ContanerBuildInfo),
-    StartContainer(String),
-    RemoveContainer(String),
-    CreateContainer(String),
-}
-
-pub struct Task {
-    pub(crate) task_type: TaskTypes,
-    pub dependencies: Vec<Task>,
-}
-
-impl Task {
-    pub async fn run_task(&self) {
-        info!("Looking for tasks to run!");
-        match &self.task_type {
-            TaskTypes::CreateImage(s) => {
-                self.create_image(s).await.expect("Failed to create image");
+fn create_worker(queue: Arc<TaskQueue>) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        loop {
+            if let Some(task) = queue.dequeue() {
+                task.execute();
+            } else {
+                // No tasks available, wait for a signal.
+                let _ = queue.condvar.wait(queue.queue.lock().unwrap());
             }
-            TaskTypes::StartContainer(s) => self.start_container(s).await,
-            _ => todo!("Unimplemented task"),
         }
-        info!("Task completed!");
-    }
-    pub async fn add_to_queue(self) {
-        add_task(self).await;
-    }
-    async fn create_image(
-        &self,
-        build_info: &ContanerBuildInfo,
-    ) -> Result<String, shiplift::Error> {
-        info!("Started create_image task!");
-        #[cfg(unix)]
-        {
-            let file_path: &Path = Path::new(&build_info.file_path);
-            return docker::create_image(&file_path, &build_info.user_id).await;
-        }
-        info!("Image was created!");
-        #[cfg(not(unix))]
-        {
-            error!("Cannot create images on Windows!");
+    })
+}
+struct TaskQueue {
+    queue: Mutex<Vec<Box<dyn Task>>>,
+    condvar: Condvar,
+}
+
+impl TaskQueue {
+    fn new() -> Self {
+        TaskQueue {
+            queue: Mutex::new(vec![]),
+            condvar: Condvar::new(),
         }
     }
 
-    async fn start_container(&self, tag: &str) {
-        info!("Started start_container task!");
-        #[cfg(unix)]
-        {
-            docker::start_container(tag)
-                .await
-                .expect("Failed to start container");
-        }
-        #[cfg(not(unix))]
-        {
-            error!("Cannot start container on Windows!");
-        }
+    fn enqueue(&self, task: Box<dyn Task>) {
+        let mut queue = self.queue.lock().unwrap();
+        queue.push(task);
+        self.condvar.notify_one();
+    }
+
+    fn dequeue(&self) -> Option<Box<dyn Task>> {
+        let mut queue = self.queue.lock().unwrap();
+        queue.pop()
     }
 }
 
-pub struct Queue<Task> {
-    queue: Vec<Task>,
+pub struct ClearCache;
+
+impl Task for ClearCache {
+    fn execute(&self) {
+        println!("Clearing cache...");
+    }
+
+    fn dependencies(&self) -> Vec<Box<dyn Task>> {
+        vec![] // No dependencies for ClearCache
+    }
 }
 
-impl Queue<Task> {
-    pub fn new() -> Self {
-        Queue { queue: Vec::new() }
+struct StopContainer(String);
+
+impl Task for StopContainer {
+    fn execute(&self) {
+        println!("Stopping container with ID: {}", self.0);
     }
 
-    pub fn enqueue(&mut self, item: Task) {
-        self.queue.push(item)
+    fn dependencies(&self) -> Vec<Box<dyn Task>> {
+        vec![] // No dependencies for StopContainer
+    }
+}
+
+pub struct JobSystem {
+    queue: Arc<TaskQueue>,
+}
+
+impl JobSystem {
+    pub fn new(num_workers: usize) -> Self {
+        let queue = Arc::new(TaskQueue::new());
+        let mut workers = Vec::new();
+        for _ in 0..num_workers {
+            workers.push(create_worker(queue.clone()));
+        }
+        JobSystem { queue }
     }
 
-    pub fn dequeue(&mut self) -> Task {
-        self.queue.remove(0)
-    }
-
-    pub fn length(&self) -> usize {
-        self.queue.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
+    pub fn submit_task(&self, task: Box<dyn Task>) {
+        // Enqueue the task with its dependencies
+        let mut tasks_to_execute = vec![task];
+        while !tasks_to_execute.is_empty() {
+            let current_task = tasks_to_execute.pop().unwrap();
+            self.queue.enqueue(current_task);
+            for dependency in current_task.dependencies() {
+                tasks_to_execute.push(dependency);
+            }
+        }
     }
 }

@@ -6,20 +6,16 @@ mod docker;
 mod files;
 mod id_generator;
 mod server;
-mod task_queue;
 mod tasks;
 use axum::{
     routing::{get, post},
     Router,
 };
-use env_logger::{Builder, Env, Logger};
+use env_logger::Builder;
 use log::LevelFilter;
 use std::net::SocketAddr;
-use tokio::task;
 
-async fn start_queue_thread() {
-    data::queue_thread().await;
-}
+use crate::tasks::JobSystem;
 
 #[tokio::main]
 async fn main() {
@@ -34,17 +30,16 @@ async fn main() {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
 
+    let job_system = JobSystem::new(4);
+    let clear_cache_task = Box::new(tasks::ClearCache);
+    job_system.submit_task(clear_cache_task);
+
     info!("Connecting to database!");
     let mut db = database::connect_to_db()
         .await
         .expect("Failed to connect to databse!");
     info!("Connected!");
     database::print_users(&db).await;
-    info!("Starting task queue thread");
-    tokio::spawn(async {
-        start_queue_thread().await;
-    });
-    // tracing_subscriber::fmt::init();
 
     info!("Starting axum router");
     // build our application with a route

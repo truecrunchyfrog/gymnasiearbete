@@ -1,13 +1,12 @@
 extern crate shiplift;
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use shiplift::tty::TtyChunk;
+use shiplift::ImageListOptions;
 use shiplift::{errors::Error, BuildOptions, ContainerOptions, Docker, Image, LogsOptions};
-use shiplift::{ImageListOptions, Network};
 
 use std::fs::copy;
 use std::fs::remove_file;
 use std::path::Path;
-use uuid::Uuid;
 
 const DOCKERFILE: &str = "./docker";
 const CONTAINERNAME: &str = "container";
@@ -51,7 +50,7 @@ pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplif
     remove_container(&docker, container_id)
         .await
         .expect("Failed to remove container");
-    remove_image(&docker, image_tag)
+    remove_image(&docker, container_id)
         .await
         .expect("Failed to remove image");
     todo!()
@@ -87,7 +86,7 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, sh
         .build();
     let destination = format!(
         "{}/{}",
-        USER_CODE.to_string(),
+        USERCODE.to_string(),
         file_path
             .to_owned()
             .file_name()
