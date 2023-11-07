@@ -56,15 +56,15 @@ pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplif
     todo!()
 }
 
-pub async fn remove_container(docker: &Docker, container_id: &str) -> Result<(), shiplift::Error> {
+pub async fn remove_container(_docker: &Docker, _container_id: &str) -> Result<(), shiplift::Error> {
     todo!()
 }
 
-pub async fn remove_image(docker: &Docker, image_tag: &str) -> Result<(), shiplift::Error> {
+pub async fn remove_image(_docker: &Docker, _image_tag: &str) -> Result<(), shiplift::Error> {
     todo!()
 }
 
-pub async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), shiplift::Error> {
+pub async fn stop_container(_docker: &Docker, _container_id: &str) -> Result<(), shiplift::Error> {
     todo!()
 }
 
@@ -82,7 +82,7 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, sh
     );
     let docker: Docker = Docker::new();
     let builder = BuildOptions::builder(DOCKERFILE)
-        .tag(build_id.clone())
+        .tag(build_id)
         .build();
     let destination = format!(
         "{}/{}",

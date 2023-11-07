@@ -3,6 +3,7 @@ use sqlx::postgres::PgConnectOptions;
 use sqlx::PgPool;
 pub async fn connect_to_db() -> Result<PgPool, sqlx::Error> {
     dotenv::dotenv().ok();
+    // We can panick here is Env is not configured TODO?
     let url = std::env::var("DATABASE_URL").unwrap();
     let port = std::env::var("DATABASE_PORT").unwrap();
     let username = std::env::var("DATABASE_USER").unwrap();

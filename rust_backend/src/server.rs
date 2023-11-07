@@ -1,12 +1,14 @@
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
-use axum::extract::Multipart;
+use crate::tasks::{ClearCache, Task};
+use crate::AppState;
+use axum::extract::{Multipart, State};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use uuid::Uuid;
 
-pub async fn upload(mut multipart: Multipart) {
+pub async fn upload(State(state): State<AppState>, mut multipart: Multipart) {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.file_name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
@@ -25,6 +27,8 @@ pub async fn upload(mut multipart: Multipart) {
 
         file.write_all(&data).expect("Failed to write file");
         info!("File uploaded `{}` and is {} bytes", name, data.len());
+        let task = ClearCache;
+        state.jobs.submit_task(Box::new(task));
         break;
     }
     return;
