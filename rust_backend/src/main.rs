@@ -40,7 +40,7 @@ async fn main() {
     }
 
     // Start jobsystem with x workers
-    let job_system = JobSystem::new(1);
+    let job_system = JobSystem::new(5);
 
     info!("Connecting to database!");
     // let database = database::connect_to_db()

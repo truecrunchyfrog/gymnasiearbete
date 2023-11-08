@@ -1,6 +1,6 @@
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
-use crate::tasks::{ClearCache, Task};
+use crate::tasks::{ClearCache, RunCode, Task};
 use crate::AppState;
 use axum::extract::{Multipart, State};
 use std::fs;
@@ -27,7 +27,7 @@ pub async fn upload(State(state): State<AppState>, mut multipart: Multipart) {
 
         file.write_all(&data).expect("Failed to write file");
         info!("File uploaded `{}` and is {} bytes", name, data.len());
-        let task = ClearCache;
+        let task = RunCode(path_str);
         state.jobs.submit_task(Box::new(task));
         break;
     }

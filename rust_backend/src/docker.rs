@@ -47,7 +47,7 @@ pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplif
     stop_container(&docker, container_id)
         .await
         .expect("Failed to stop container");
-    remove_container(&docker, container_id)
+    remove_container(container_id)
         .await
         .expect("Failed to remove container");
     remove_image(&docker, container_id)
@@ -56,7 +56,7 @@ pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplif
     todo!()
 }
 
-pub async fn remove_container(_docker: &Docker, _container_id: &str) -> Result<(), shiplift::Error> {
+pub async fn remove_container(_container_id: &str) -> Result<(), shiplift::Error> {
     todo!()
 }
 
@@ -81,9 +81,7 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, sh
         &file_path.to_str().unwrap()
     );
     let docker: Docker = Docker::new();
-    let builder = BuildOptions::builder(DOCKERFILE)
-        .tag(build_id)
-        .build();
+    let builder = BuildOptions::builder(DOCKERFILE).tag(build_id).build();
     let destination = format!(
         "{}/{}",
         USERCODE.to_string(),
