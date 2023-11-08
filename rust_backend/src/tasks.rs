@@ -5,7 +5,7 @@ use std::error::Error;
 use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-
+use tokio::task;
 pub enum TaskResult {
     Done,
     Failed(Box<dyn Error>),
@@ -17,13 +17,20 @@ pub trait Task: Send + Sync {
     fn dependencies(&self) -> Vec<Box<dyn Task>>;
 }
 
-async fn create_worker(queue: Arc<TaskQueue>) -> thread::JoinHandle<()> {
-    thread::spawn(move || {
+async fn create_worker(queue: Arc<TaskQueue>) -> task::JoinHandle<()> {
+    task::spawn(async move {
         loop {
             if let Some(task) = queue.dequeue() {
-                let _task_result = task.execute();
-                match _task_result.await {
-                    _ => info!("Task Completed?"),
+                let _task_result = task.execute().await;
+                if let Ok(Some(result)) = _task_result {
+                    // no need to unwrap
+                    match result {
+                        TaskResult::Done => info!("Task completed!"),
+                        TaskResult::Failed(e) => warn!("Task failed: {}", e),
+                        TaskResult::Skipped => info!("Task skipped"),
+                    }
+                } else if let Err(e) = _task_result {
+                    error!("{}", e);
                 }
             } else {
                 // No tasks available, wait for a signal.
