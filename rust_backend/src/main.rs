@@ -7,9 +7,8 @@ mod files;
 mod id_generator;
 mod server;
 mod tasks;
+
 use axum::{
-    extract::State,
-    handler::Handler,
     routing::{get, post},
     Router,
 };
@@ -17,8 +16,9 @@ use env_logger::Builder;
 use log::LevelFilter;
 use sqlx::{Pool, Postgres};
 use std::net::SocketAddr;
+use tasks::TaskTrait;
 
-use crate::tasks::JobSystem;
+use crate::tasks::{ClearCache, JobSystem, Task};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,7 +27,7 @@ pub struct AppState {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = Builder::from_default_env();
     builder.filter_level(LevelFilter::Info);
     builder.init();
@@ -40,18 +40,17 @@ async fn main() {
     }
 
     // Start jobsystem with x workers
-    let job_system = JobSystem::new(5);
+    let job_system = JobSystem::new(1).await;
 
     info!("Connecting to database!");
-    // let database = database::connect_to_db()
-    //     .await
-    //    .expect("Failed to connect to databse!");
-    //info!("Connected!");
     let database = None;
-    let state = AppState {
+    let mut state = AppState {
         db: database,
         jobs: job_system,
     };
+    let clear_cache_task = Box::new(ClearCache {});
+    let task = Task::new(clear_cache_task);
+    state.jobs.add_and_submit_task(task);
 
     info!("Starting axum router");
     // build our application with a route
@@ -63,8 +62,10 @@ async fn main() {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     info!("Listening on {}", addr);
+
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
+
+    Ok(())
 }

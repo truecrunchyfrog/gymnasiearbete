@@ -44,7 +44,7 @@ pub async fn start_container(image_id: &str) -> Result<(), Error> {
 
 pub async fn stop_and_remove_container(container_id: &str) -> Result<(), shiplift::Error> {
     let docker: Docker = Docker::new();
-    stop_container(&docker, container_id)
+    stop_container(container_id)
         .await
         .expect("Failed to stop container");
     remove_container(container_id)
@@ -64,7 +64,7 @@ pub async fn remove_image(_docker: &Docker, _image_tag: &str) -> Result<(), ship
     todo!()
 }
 
-pub async fn stop_container(_docker: &Docker, _container_id: &str) -> Result<(), shiplift::Error> {
+pub async fn stop_container(_container_id: &str) -> Result<(), shiplift::Error> {
     todo!()
 }
 

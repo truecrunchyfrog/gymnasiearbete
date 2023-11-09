@@ -6,9 +6,10 @@ use axum::extract::{Multipart, State};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-pub async fn upload(State(state): State<AppState>, mut multipart: Multipart) {
+pub async fn upload(State(mut state): State<AppState>, mut multipart: Multipart) {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.file_name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
@@ -27,8 +28,16 @@ pub async fn upload(State(state): State<AppState>, mut multipart: Multipart) {
 
         file.write_all(&data).expect("Failed to write file");
         info!("File uploaded `{}` and is {} bytes", name, data.len());
-        let task = RunCode(path_str);
-        state.jobs.submit_task(Box::new(task));
+
+        let run_code = Box::new(RunCode {
+            code_path: path_str,
+        });
+        let clear_task = Box::new(ClearCache {});
+        let ct = Task::new(clear_task);
+        let task = Task::new_with_dependencies(run_code, vec![&ct]);
+        state.jobs.add_and_submit_task(ct);
+        state.jobs.add_and_submit_task(task);
+
         break;
     }
     return;
