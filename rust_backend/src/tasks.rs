@@ -43,7 +43,7 @@ impl Task {
             task_trait,
         };
         info!("Created task with id: {}", task.id);
-        return task;
+        task
     }
     pub fn new_with_dependencies(task_trait: Box<dyn TaskTrait>, deps: Vec<&Task>) -> Self {
         let mut ids: Vec<Uuid> = vec![];
@@ -58,7 +58,7 @@ impl Task {
             task_trait,
         };
         info!("Created task with id: {}", task.id);
-        return task;
+        task
     }
 }
 
@@ -195,7 +195,7 @@ impl JobSystem {
     async fn create_worker(&self) {
         loop {
             if let Some(task) = &self.task_queue.dequeue() {
-                let task = Arc::clone(&task);
+                let task = Arc::clone(task);
                 let task_id = task.lock().unwrap().id;
                 if self.should_wait(&task.lock().unwrap()) {
                     self.task_queue.enqueue(task);
@@ -203,7 +203,10 @@ impl JobSystem {
                 }
                 info!("Started with task: {}", &task_id);
 
-                let task_result = &task.lock().unwrap().task_trait.execute().await;
+                let task_trait = &task.lock().unwrap().task_trait;
+                let task_trait = task_trait.execute();
+
+                let task_result = task_trait.await;
                 match task_result {
                     TaskResult::Done(Some(d)) => info!("{} completed {}", &task_id, d),
                     TaskResult::Done(None) => info!("{} completed", &task_id),
@@ -240,7 +243,7 @@ impl JobSystem {
         for d in &task.dependencies {
             info!("I have dep: {}", d);
             let task = self.tasks.get(d);
-            if !task.is_some() {
+            if task.is_none() {
                 info!("I cant find task with id: {}", d);
                 return false;
             }
@@ -251,6 +254,6 @@ impl JobSystem {
                 _ => continue,
             }
         }
-        return false;
+        false
     }
 }

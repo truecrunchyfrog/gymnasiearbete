@@ -84,7 +84,7 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, sh
     let builder = BuildOptions::builder(DOCKERFILE).tag(build_id).build();
     let destination = format!(
         "{}/{}",
-        USERCODE.to_string(),
+        USERCODE,
         file_path
             .to_owned()
             .file_name()
@@ -104,7 +104,7 @@ pub async fn create_image(file_path: &Path, build_id: &str) -> Result<String, sh
     }
     remove_file(&destination).expect("Failed to remove file");
     info!("Container created, with tag: {}", &build_id);
-    return Ok(build_id.to_string());
+    Ok(build_id.to_string())
 }
 
 async fn print_all_images(docker: &Docker) {

@@ -6,7 +6,7 @@ use axum::extract::{Multipart, State};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+
 use uuid::Uuid;
 
 pub async fn upload(State(mut state): State<AppState>, mut multipart: Multipart) {
@@ -24,7 +24,7 @@ pub async fn upload(State(mut state): State<AppState>, mut multipart: Multipart)
             .write(true)
             // either use the ? operator or unwrap since it returns a Result
             .open(upload_dir)
-            .expect(format!("Failed to find path: {}", path_str).as_str());
+            .unwrap_or_else(|_| panic!("Failed to find path: {}", path_str));
 
         file.write_all(&data).expect("Failed to write file");
         info!("File uploaded `{}` and is {} bytes", name, data.len());
@@ -37,10 +37,7 @@ pub async fn upload(State(mut state): State<AppState>, mut multipart: Multipart)
         let task = Task::new_with_dependencies(run_code, vec![&ct]);
         state.jobs.add_and_submit_task(ct);
         state.jobs.add_and_submit_task(task);
-
-        break;
     }
-    return;
 }
 
 // basic handler that responds with a static string

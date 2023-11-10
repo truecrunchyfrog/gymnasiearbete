@@ -16,13 +16,12 @@ use env_logger::Builder;
 use log::LevelFilter;
 use sqlx::{Pool, Postgres};
 use std::net::SocketAddr;
-use tasks::TaskTrait;
 
 use crate::tasks::{ClearCache, JobSystem, Task};
 
 #[derive(Clone)]
 pub struct AppState {
-    db: Option<Pool<Postgres>>,
+    db: Pool<Postgres>,
     jobs: JobSystem,
 }
 
@@ -43,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let job_system = JobSystem::new(1).await;
 
     info!("Connecting to database!");
-    let database = None;
+    let database = database::connect_to_db().await.unwrap();
     let mut state = AppState {
         db: database,
         jobs: job_system,
