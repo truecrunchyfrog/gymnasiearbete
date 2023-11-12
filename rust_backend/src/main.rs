@@ -43,20 +43,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Connecting to database!");
     let database = database::connect_to_db().await.unwrap();
-    let mut state = AppState {
+    let state = AppState {
         db: database,
         jobs: job_system,
     };
-    let clear_cache_task = Box::new(ClearCache {});
-    let task = Task::new(clear_cache_task);
-    state.jobs.add_and_submit_task(task);
 
     info!("Starting axum router");
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(server::root))
-        .route("/upload", post(server::upload))
+        .route("/upload", post(server::upload)).route("/files", get(server::get_files))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

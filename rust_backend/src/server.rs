@@ -1,8 +1,11 @@
+use crate::database::{upload_file, get_all_files, get_all_files_json, FileRecord};
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
 use crate::tasks::{ClearCache, RunCode, Task};
 use crate::AppState;
+use axum::Json;
 use axum::extract::{Multipart, State};
+use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -27,20 +30,18 @@ pub async fn upload(State(mut state): State<AppState>, mut multipart: Multipart)
             .unwrap_or_else(|_| panic!("Failed to find path: {}", path_str));
 
         file.write_all(&data).expect("Failed to write file");
+        let _upload = upload_file(&state.db, &path_str, "c".to_string(), Uuid::new_v4()).await;
         info!("File uploaded `{}` and is {} bytes", name, data.len());
-
-        let run_code = Box::new(RunCode {
-            code_path: path_str,
-        });
-        let clear_task = Box::new(ClearCache {});
-        let ct = Task::new(clear_task);
-        let task = Task::new_with_dependencies(run_code, vec![&ct]);
-        state.jobs.add_and_submit_task(ct);
-        state.jobs.add_and_submit_task(task);
     }
 }
 
 // basic handler that responds with a static string
 pub async fn root() -> &'static str {
     "Hello, World!"
+}
+
+
+pub async fn get_files(State(state):State<AppState>) -> Json<Vec<FileRecord>>{
+    let file_json = get_all_files_json(&state.db).await.unwrap();
+    file_json
 }

@@ -1,17 +1,31 @@
+use axum::Json;
+use dotenv;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+use sqlx::Row;
 use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::PgRow;
 use sqlx::types::chrono::{NaiveDateTime, Utc};
 use sqlx::types::Uuid;
 use sqlx::PgPool;
-use std::fs::File;
+use sqlx::migrate::Migrator;
+
+use std::fs;
+use std::env;
 use std::io::Read;
 
-#[derive(Debug, sqlx::FromRow)]
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FileRecord {
     pub id: Uuid,
     pub filename: String,
-    pub programming_language: Option<String>,
-    pub filesize: Option<i32>,
-    pub lastchanges: Option<NaiveDateTime>,
+    pub programming_language: String,
+    pub filesize: i32,
+    pub lastchanges: NaiveDateTime,
     pub file_uuid: Uuid,
     pub owner_uuid: Uuid,
 }
@@ -19,7 +33,9 @@ pub struct FileRecord {
 pub async fn connect_to_db() -> Result<PgPool, sqlx::Error> {
     dotenv::dotenv().ok();
 
-    let url = std::env::var("DATABASE_URL").expect("DATABASE_URL not set in .env");
+    let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        panic!("DATABASE_URL not set in .env");
+    });
     let port = std::env::var("DATABASE_PORT").expect("DATABASE_PORT not set in .env");
     let username = std::env::var("DATABASE_USER").expect("DATABASE_USER not set in .env");
     let password = std::env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD not set in .env");
@@ -49,17 +65,17 @@ pub async fn connect_to_db() -> Result<PgPool, sqlx::Error> {
     println!("migration: {:?}", migration_results);
     Ok(db)
 }
-async fn upload_file(
+pub async fn upload_file(
     pool: &PgPool,
     file_path: &str,
     language: String,
     user_uuid: Uuid,
 ) -> Result<(), sqlx::Error> {
-    let mut file = File::open(file_path)?;
-
-    // Read file contents
+    let mut file = File::open(file_path).await?;
     let mut file_contents = Vec::new();
-    file.read_to_end(&mut file_contents)?;
+    file.read_to_end(&mut file_contents).await?;
+
+
 
     // Calculate remaining fields
     let filename = file_path.split('/').last().unwrap_or_default().to_string();
@@ -84,4 +100,34 @@ async fn upload_file(
     .await?;
 
     Ok(())
+}
+pub async fn get_all_files(pool: &PgPool) -> Result<Vec<FileRecord>, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        SELECT id, filename, programming_language, filesize, lastchanges, file_uuid, owner_uuid
+        FROM files
+    "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let files: Vec<FileRecord> = result
+        .into_iter()
+        .map(|row: PgRow| FileRecord {
+            id: row.try_get("id").unwrap(),
+            filename: row.try_get("filename").unwrap(),
+            programming_language: row.try_get("programming_language").unwrap(),
+            filesize: row.try_get("filesize").unwrap(),
+            lastchanges: row.try_get("lastchanges").unwrap(),
+            file_uuid: row.try_get("file_uuid").unwrap(),
+            owner_uuid: row.try_get("owner_uuid").unwrap(),
+        })
+        .collect();
+
+    Ok(files)
+}
+
+pub async fn get_all_files_json(pool: &PgPool) -> Result<Json<Vec<FileRecord>>, sqlx::Error> {
+    let files = get_all_files(pool).await?;
+    Ok(Json(files))
 }
