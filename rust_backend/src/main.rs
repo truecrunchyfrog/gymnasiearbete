@@ -40,9 +40,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start jobsystem with x workers
     let job_system = JobSystem::new(1).await;
-
+    let database;
     info!("Connecting to database!");
-    let database = database::connect_to_db().await.unwrap();
+    match database::connect_to_db().await {
+        Ok(d) => database = d,
+        Err(e) => panic!("{}", e),
+    }
     let state = AppState {
         db: database,
         jobs: job_system,
@@ -53,7 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(server::root))
-        .route("/upload", post(server::upload)).route("/files", get(server::get_files))
+        .route("/upload", post(server::upload))
+        .route("/files", get(server::get_files))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
