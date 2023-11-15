@@ -17,7 +17,7 @@ use log::LevelFilter;
 use sqlx::{Pool, Postgres};
 use std::net::SocketAddr;
 
-use crate::tasks::{ClearCache, JobSystem, Task};
+use crate::tasks::{JobSystem};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -58,6 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(server::root))
         .route("/upload", post(server::upload))
         .route("/files", get(server::get_files))
+        .route("/file/:file_id", get(server::get_file))
+        .route("/status/:file_id", get(server::get_build))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

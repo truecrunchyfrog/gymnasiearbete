@@ -16,3 +16,5 @@ Cargo.lock
 # Uploaded files
 upload/*
 .env
+.cargo/
+.sqlx/

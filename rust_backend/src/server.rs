@@ -1,13 +1,11 @@
-use crate::database::{get_all_files, get_all_files_json, upload_file, FileRecord, FileSummary};
+use crate::database::{get_all_files_json, get_file_info, upload_file, FileSummary, get_build_status, BuildStatus};
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
-use crate::tasks::{ClearCache, RunCode, Task};
 use crate::AppState;
 use axum::debug_handler;
 use axum::extract::{Multipart, State};
 use axum::Json;
 use http::StatusCode;
-use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -34,10 +32,20 @@ pub async fn upload(
             .unwrap_or_else(|_| panic!("Failed to find path: {}", path_str));
 
         file.write_all(&data).expect("Failed to write file");
-
+        let file_uuid = Uuid::new_v4();
+        let user_uuid = Uuid::new_v4();
         // Pass path_str by value
-        let _upload = upload_file(&state.db, &path_str, &"c".to_string(), &Uuid::new_v4()).await;
+        let _upload = upload_file(
+            &state.db,
+            &name,
+            &file_uuid,
+            &path_str,
+            &"c".to_string(),
+            &user_uuid,
+        )
+        .await;
         info!("File uploaded `{}` and is {} bytes", name, data.len());
+        return Ok(file_uuid.to_string());
     }
     Ok(200.to_string())
 }
@@ -47,9 +55,25 @@ pub async fn root() -> &'static str {
     "Hello, World!"
 }
 
+pub async fn get_build (
+    State(state): State<AppState>,
+    axum::extract::Path(file_id): axum::extract::Path<Uuid>,
+) -> Result<Json<BuildStatus>, StatusCode> {
+    Ok(get_build_status(&state.db, &file_id).await.unwrap())
+}
+
 pub async fn get_files(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<FileSummary>>, StatusCode> {
     let file_json = get_all_files_json(&state.db).await.unwrap();
+    Ok(file_json)
+}
+
+pub async fn get_file(
+    State(state): State<AppState>,
+    axum::extract::Path(file_id): axum::extract::Path<Uuid>,
+) -> Result<Json<FileSummary>, StatusCode> {
+    info!("{}", file_id);
+    let file_json = get_file_info(&state.db, &file_id).await.unwrap();
     Ok(file_json)
 }
