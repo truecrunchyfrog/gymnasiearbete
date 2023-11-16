@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate shiplift;
 use futures::StreamExt;
 use shiplift::tty::TtyChunk;

@@ -1,4 +1,6 @@
-use crate::database::{get_all_files_json, get_file_info, upload_file, FileSummary, get_build_status, BuildStatus};
+use crate::database::{
+    get_all_files_json, get_build_status, get_file_info, upload_file, BuildStatus, FileSummary,
+};
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
 use crate::AppState;
@@ -35,15 +37,7 @@ pub async fn upload(
         let file_uuid = Uuid::new_v4();
         let user_uuid = Uuid::new_v4();
         // Pass path_str by value
-        let _upload = upload_file(
-            &state.db,
-            &name,
-            &file_uuid,
-            &path_str,
-            &"c".to_string(),
-            &user_uuid,
-        )
-        .await;
+        let _upload = upload_file(&state.db, &name, &path_str, &"c".to_string(), &user_uuid).await;
         info!("File uploaded `{}` and is {} bytes", name, data.len());
         return Ok(file_uuid.to_string());
     }
@@ -55,7 +49,7 @@ pub async fn root() -> &'static str {
     "Hello, World!"
 }
 
-pub async fn get_build (
+pub async fn get_build(
     State(state): State<AppState>,
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<Json<BuildStatus>, StatusCode> {

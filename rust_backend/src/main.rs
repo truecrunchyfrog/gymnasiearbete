@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[macro_use]
 extern crate log;
 mod data;
@@ -17,7 +18,7 @@ use log::LevelFilter;
 use sqlx::{Pool, Postgres};
 use std::net::SocketAddr;
 
-use crate::tasks::{JobSystem};
+use crate::tasks::JobSystem;
 
 #[derive(Clone)]
 pub struct AppState {
