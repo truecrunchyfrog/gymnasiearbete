@@ -9,20 +9,19 @@ mod id_generator;
 mod server;
 mod tasks;
 
+use crate::tasks::JobSystem;
 use axum::{
     routing::{get, post},
     Router,
 };
+use database::connection::{connect_to_db, DBPool};
 use env_logger::Builder;
 use log::LevelFilter;
-use sqlx::{Pool, Postgres};
 use std::net::SocketAddr;
-
-use crate::tasks::JobSystem;
 
 #[derive(Clone)]
 pub struct AppState {
-    db: Pool<Postgres>,
+    db: DBPool,
     jobs: JobSystem,
 }
 
@@ -41,12 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start jobsystem with x workers
     let job_system = JobSystem::new(1).await;
-    let database;
+    let database: DBPool = connect_to_db();
     info!("Connecting to database!");
-    match database::connect_to_db().await {
-        Ok(d) => database = d,
-        Err(e) => panic!("{}", e),
-    }
+
     let state = AppState {
         db: database,
         jobs: job_system,
@@ -58,9 +54,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // `GET /` goes to `root`
         .route("/", get(server::root))
         .route("/upload", post(server::upload))
-        .route("/files", get(server::get_files))
-        .route("/file/:file_id", get(server::get_file))
-        .route("/status/:file_id", get(server::get_build))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
