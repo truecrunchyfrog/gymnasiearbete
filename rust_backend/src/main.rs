@@ -8,20 +8,26 @@ mod files;
 mod id_generator;
 mod server;
 mod tasks;
+mod schema;
+mod models;
 
-use crate::tasks::JobSystem;
+use crate::{tasks::JobSystem, database::connection::connect_to_db};
 use axum::{
     routing::{get, post},
     Router,
 };
-use database::connection::{connect_to_db, DBPool};
+
+use diesel::{r2d2::{Pool, ConnectionManager}, PgConnection};
 use env_logger::Builder;
 use log::LevelFilter;
 use std::net::SocketAddr;
 
+
+
+
 #[derive(Clone)]
 pub struct AppState {
-    db: DBPool,
+    db: Pool<ConnectionManager<PgConnection>>,
     jobs: JobSystem,
 }
 
@@ -40,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start jobsystem with x workers
     let job_system = JobSystem::new(1).await;
-    let database: DBPool = connect_to_db();
+    let database  = connect_to_db().await;
     info!("Connecting to database!");
 
     let state = AppState {

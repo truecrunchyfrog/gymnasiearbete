@@ -1,4 +1,4 @@
-use crate::database::connection::upload_file;
+use crate::database::connection::{get_connection, upload_file};
 use crate::files::get_extension_from_filename;
 use crate::id_generator::UniqueId;
 use crate::AppState;
@@ -37,8 +37,13 @@ pub async fn upload(
 
         file.write_all(&data).expect("Failed to write file");
         // Pass path_str by value
-        let _upload = upload_file(&state.db, &name, &path_str, &"c".to_string()).await;
-        info!("File uploaded `{}` and is {} bytes", name, data.len());
+        let mut conn = get_connection(&state.db).await.unwrap();
+        let upload = upload_file(&mut conn, &name, &path_str, &"c".to_string()).await;
+        match upload {
+            Ok(f_id) => info!("File uploaded `{}`", f_id),
+            Err(e) => error!("{}",e),
+        }
+        
         return Ok("Ok".to_string());
     }
     Ok(200.to_string())
