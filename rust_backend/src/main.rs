@@ -6,24 +6,24 @@ mod database;
 mod docker;
 mod files;
 mod id_generator;
+mod models;
+mod schema;
 mod server;
 mod tasks;
-mod schema;
-mod models;
 
-use crate::{tasks::JobSystem, database::connection::connect_to_db};
+use crate::{database::connection::connect_to_db, tasks::JobSystem};
 use axum::{
     routing::{get, post},
     Router,
 };
 
-use diesel::{r2d2::{Pool, ConnectionManager}, PgConnection};
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    PgConnection,
+};
 use env_logger::Builder;
 use log::LevelFilter;
 use std::net::SocketAddr;
-
-
-
 
 #[derive(Clone)]
 pub struct AppState {
@@ -44,14 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
 
-    // Start jobsystem with x workers
-    let job_system = JobSystem::new(1).await;
-    let database  = connect_to_db().await;
+    let database = connect_to_db().await;
     info!("Connecting to database!");
 
     let state = AppState {
         db: database,
-        jobs: job_system,
+        jobs: None,
     };
 
     info!("Starting axum router");
@@ -60,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // `GET /` goes to `root`
         .route("/", get(server::root))
         .route("/upload", post(server::upload))
+        .route("/status/:fileid", get(server::return_build_status))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

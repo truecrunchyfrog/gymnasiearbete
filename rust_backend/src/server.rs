@@ -1,22 +1,24 @@
-use crate::database::connection::{get_connection, upload_file};
+use crate::database::connection::{
+    get_build_status, get_connection, update_build_status, upload_file,
+};
 use crate::files::get_extension_from_filename;
-use crate::id_generator::UniqueId;
+
 use crate::AppState;
-use axum::debug_handler;
 use axum::extract::{Multipart, State};
-use axum::Json;
-use diesel::sql_types::Uuid;
+use axum::{debug_handler, Json};
+
 use http::StatusCode;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
+use uuid::Uuid;
 
 #[debug_handler]
 pub async fn upload(
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<String, StatusCode> {
+) -> Result<axum::Json<Uuid>, StatusCode> {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.file_name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
@@ -40,16 +42,30 @@ pub async fn upload(
         let mut conn = get_connection(&state.db).await.unwrap();
         let upload = upload_file(&mut conn, &name, &path_str, &"c".to_string()).await;
         match upload {
-            Ok(f_id) => info!("File uploaded `{}`", f_id),
-            Err(e) => error!("{}",e),
+            Ok(f_id) => return Ok(Json(f_id)),
+            Err(e) => error!("{}", e),
         }
-        
-        return Ok("Ok".to_string());
+
+        return Err(StatusCode::NOT_ACCEPTABLE);
     }
-    Ok(200.to_string())
+    return Err(StatusCode::NOT_ACCEPTABLE);
 }
 
 // basic handler that responds with a static string
 pub async fn root() -> &'static str {
     "Hello, World!"
+}
+
+#[debug_handler]
+pub async fn return_build_status(
+    State(state): State<AppState>,
+    axum::extract::Path(file_id): axum::extract::Path<Uuid>,
+) -> Result<axum::Json<crate::models::Buildstatus>, StatusCode> {
+    let mut conn = get_connection(&state.db).await.unwrap();
+    let status = get_build_status(&mut conn, file_id).await;
+    let _ = update_build_status(&mut conn, file_id, crate::models::Buildstatus::Started);
+    match status {
+        Ok(s) => return Ok(Json(s)),
+        Err(_) => Err(StatusCode::NOT_FOUND),
+    }
 }

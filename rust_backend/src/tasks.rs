@@ -1,259 +1,82 @@
-use crate::docker;
-use async_trait::async_trait;
-use core::time;
-use std::collections::HashMap;
+use diesel::PgConnection;
 use std::error::Error;
-use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use uuid::Uuid;
-pub enum TaskResult {
-    Done(Option<String>),
-    Failed(Box<dyn Error>),
-    Skipped,
+
+pub struct GlobalState {
+    pub database_connection: Arc<PgConnection>,
+    // Other shared resources
 }
 
-#[derive(Clone)]
-pub enum TaskStatus {
-    NotStarted,
-    InProgress,
-    Completed,
-    Failed,
-}
-
-#[async_trait]
-pub trait TaskTrait: Send + Sync {
-    async fn execute(&self) -> TaskResult;
-    fn dependencies(&self) -> Vec<Uuid>;
+pub struct TaskStatus {
+    pub state: TaskState,
+    pub start_time: Instant,
+    // Additional metadata
 }
 
 pub struct Task {
-    pub status: TaskStatus,
     pub id: Uuid,
     pub dependencies: Vec<Uuid>,
     pub task_trait: Box<dyn TaskTrait>,
-}
-
-impl Task {
-    pub fn new(task_trait: Box<dyn TaskTrait>) -> Self {
-        let task = Task {
-            status: TaskStatus::NotStarted,
-            id: Uuid::new_v4(),
-            dependencies: vec![],
-            task_trait,
-        };
-        info!("Created task with id: {}", task.id);
-        task
-    }
-    pub fn new_with_dependencies(task_trait: Box<dyn TaskTrait>, deps: Vec<&Task>) -> Self {
-        let mut ids: Vec<Uuid> = vec![];
-        for d in deps {
-            info!("Added dep {}", d.id);
-            ids.push(d.id);
-        }
-        let task = Task {
-            status: TaskStatus::NotStarted,
-            id: Uuid::new_v4(),
-            dependencies: ids,
-            task_trait,
-        };
-        info!("Created task with id: {}", task.id);
-        task
-    }
+    pub callback: Arc<Mutex<dyn Fn(TaskResult)>>,
 }
 
 pub struct TaskQueue {
-    queue: Mutex<Vec<Arc<Mutex<Box<Task>>>>>,
-    condvar: Condvar,
+    pub queue: Mutex<Vec<Task>>,
 }
 
-impl TaskQueue {
-    pub fn new() -> Self {
-        TaskQueue {
-            queue: Mutex::new(vec![]),
-            condvar: Condvar::new(),
-        }
-    }
-
-    pub fn enqueue(&self, task: Arc<Mutex<Box<Task>>>) {
-        let mut queue = self.queue.lock().unwrap();
-        queue.push(task);
-        self.condvar.notify_one();
-    }
-
-    pub fn dequeue(&self) -> Option<Arc<Mutex<Box<Task>>>> {
-        let mut queue = self.queue.lock().unwrap();
-        queue.pop()
-    }
-}
-
-pub struct ClearCache {}
-
-#[async_trait]
-impl TaskTrait for ClearCache {
-    async fn execute(&self) -> TaskResult {
-        warn!("Started Clearing Cache!");
-        let tens = time::Duration::from_secs(10);
-        thread::sleep(tens);
-        info!("Cache Cleaning Done!");
-        TaskResult::Done(None)
-    }
-
-    fn dependencies(&self) -> Vec<Uuid> {
-        vec![]
-    }
-}
-
-struct BuildImage {
-    image_id: String,
-    code_path: String,
-}
-#[async_trait]
-impl TaskTrait for BuildImage {
-    async fn execute(&self) -> TaskResult {
-        info!("Started Building Image with ID: {}", self.image_id);
-        let code_path = Path::new(&self.code_path);
-
-        let image = docker::create_image(code_path, &self.image_id).await;
-
-        match image {
-            Ok(_) => return TaskResult::Done(None),
-            Err(e) => TaskResult::Failed(Box::new(e)),
-        }
-    }
-
-    fn dependencies(&self) -> Vec<Uuid> {
-        vec![]
-    }
-}
-
-pub struct RunCode {
-    pub code_path: String,
-}
-#[async_trait]
-impl TaskTrait for RunCode {
-    async fn execute(&self) -> TaskResult {
-        info!("Started running runcode!");
-        let tens = time::Duration::from_secs(10);
-        thread::sleep(tens);
-        info!("Code run done");
-        TaskResult::Done(None)
-    }
-
-    fn dependencies(&self) -> Vec<Uuid> {
-        vec![]
-    }
-}
-
-struct StopContainer {
-    container_id: String,
-}
-#[async_trait]
-impl TaskTrait for StopContainer {
-    async fn execute(&self) -> TaskResult {
-        info!("Stopping container with ID: {}", self.container_id);
-        match docker::stop_container(&self.container_id).await {
-            Ok(_) => TaskResult::Done(None),
-            Err(e) => TaskResult::Failed(Box::new(e)),
-        }
-    }
-
-    fn dependencies(&self) -> Vec<Uuid> {
-        vec![]
-    }
-}
-
-#[derive(Clone)]
 pub struct JobSystem {
-    task_queue: Arc<TaskQueue>,
-    pub tasks: HashMap<Uuid, Arc<Mutex<Box<Task>>>>,
+    pub task_queue: TaskQueue,
+    pub workers: Vec<Worker>,
+    pub global_state: GlobalState,
+}
+
+pub struct Worker {
+    current_task: Task,
+}
+
+pub enum TaskResult {
+    Done,
+    Skipped,
+}
+
+pub enum TaskState {
+    NotStarted,
+    InProgress,
+    Completed,
+}
+
+pub trait TaskTrait {
+    fn execute(&self) -> Result<TaskResult, Box<dyn Error>>;
+    fn dependencies(&self) -> Vec<Uuid>;
+    fn set_database_connection(&mut self, connection: Arc<PgConnection>);
 }
 
 impl JobSystem {
-    pub async fn new(num_workers: usize) -> Self {
-        let queue = Arc::new(TaskQueue::new());
-
-        let job_system = JobSystem {
-            task_queue: Arc::clone(&queue),
-            tasks: HashMap::new(),
-        };
-
-        // Create a new thread for worker creation
-        let job_system_clone = job_system.clone();
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                for _ in 0..num_workers {
-                    job_system_clone.create_worker().await;
-                }
-            });
-        });
-
-        job_system
+    pub fn new(num_workers: usize, state: GlobalState) -> Self {
+        // Initialize JobSystem and spawn worker threads
     }
 
-    async fn create_worker(&self) {
-        loop {
-            if let Some(task) = &self.task_queue.dequeue() {
-                let task = Arc::clone(task);
-                let task_id = task.lock().unwrap().id;
-                if self.should_wait(&task.lock().unwrap()) {
-                    self.task_queue.enqueue(task);
-                    continue;
-                }
-                info!("Started with task: {}", &task_id);
+    pub fn create_worker(&self) {
+        // Create a worker thread
+    }
 
-                let task_trait = &task.lock().unwrap().task_trait;
-                let task_trait = task_trait.execute();
+    pub fn add_and_submit_task(&self, task: Task) {
+        // Add task to the queue and submit it for execution
+    }
+}
 
-                let task_result = task_trait.await;
-                match task_result {
-                    TaskResult::Done(Some(d)) => info!("{} completed {}", &task_id, d),
-                    TaskResult::Done(None) => info!("{} completed", &task_id),
-                    TaskResult::Failed(e) => error!("{} failed: {}", &task_id, e),
-                    TaskResult::Skipped => debug!("{} was skipped", &task_id),
-                }
-                info!("Started looking for a new task!");
-                continue;
-            } else {
-                let _ = &self
-                    .task_queue
-                    .condvar
-                    .wait(self.task_queue.queue.lock().unwrap());
-                info!("Started looking for a new task!");
-            }
-        }
+impl TaskTrait for Task {
+    fn execute(&self) -> Result<TaskResult, Box<dyn Error>> {
+        // Execute the task
     }
-    pub fn add_and_submit_task(&mut self, task: Task) {
-        let task_id = task.id;
-        self.tasks
-            .insert(task_id, Arc::new(Mutex::new(Box::new(task))));
-        self.submit_task(task_id)
+
+    fn dependencies(&self) -> Vec<Uuid> {
+        // Return the task's dependencies
     }
-    pub fn submit_task(&self, task_id: Uuid) {
-        if let Some(task) = self.tasks.get(&task_id) {
-            info!("Added task with id: {}", &task_id);
-            self.task_queue.enqueue(task.clone());
-        }
-    }
-    pub fn should_wait(&self, task: &Task) -> bool {
-        if task.dependencies.is_empty() {
-            return false;
-        }
-        for d in &task.dependencies {
-            info!("I have dep: {}", d);
-            let task = self.tasks.get(d);
-            if task.is_none() {
-                info!("I cant find task with id: {}", d);
-                return false;
-            }
-            let status = &task.unwrap().lock().unwrap().status;
-            match status {
-                TaskStatus::NotStarted => return true,
-                TaskStatus::InProgress => return true,
-                _ => continue,
-            }
-        }
-        false
+
+    fn set_database_connection(&mut self, connection: Arc<PgConnection>) {
+        // Set the database connection
     }
 }

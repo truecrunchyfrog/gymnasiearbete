@@ -1,27 +1,39 @@
 use crate::schema::*;
-use diesel::{sql_types::Nullable, Selectable, Queryable};
 use chrono::NaiveDateTime;
-use diesel::{AsExpression, Insertable, deserialize::FromSqlRow, sql_types::{SqlType}};
+
+use diesel::Insertable;
+use diesel::{sql_types::Nullable, Queryable, Selectable};
+use serde::Serialize;
 use uuid::Uuid;
-use diesel::sql_types::*;
 
-
-#[derive(diesel_derive_enum::DbEnum)]
-#[derive(Debug)]
+#[derive(diesel_derive_enum::DbEnum, Debug, Serialize)]
 #[ExistingTypePath = "crate::schema::sql_types::Buildstatus"]
 pub enum Buildstatus {
-    not_started,
-    started,
-    done,
-    failed
+    NotStarted,
+    Started,
+    Done,
+    Failed,
 }
 
 pub mod exports {
     pub use super::Buildstatus;
 }
 
-#[derive(Insertable,Queryable)]
-#[table_name = "files"]
+#[derive(Insertable, Queryable)]
+#[diesel(table_name = users)]
+pub struct NewUser {
+    pub id: Uuid,
+}
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct User {
+    pub id: Uuid,
+}
+
+#[derive(Insertable, Queryable)]
+#[diesel(table_name = files)]
 pub struct NewFile {
     pub id: Uuid,
     pub filename: String,
@@ -33,9 +45,7 @@ pub struct NewFile {
     pub build_status: Buildstatus,
 }
 
-
-
-#[derive(Queryable, Selectable,Insertable)]
+#[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::schema::files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct File {

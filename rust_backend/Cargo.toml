@@ -18,7 +18,10 @@ diesel = { version = "2.1.4", features = [
     "uuid",
     "chrono",
 ] }
-diesel-async = {version = "0.4.1",features = ["postgres", "tokio-postgres"]}
+diesel-async = { version = "0.4.1", features = [
+    "postgres",
+    "tokio-postgres",
+] }
 diesel-derive-enum = { version = "2.1.0", features = [ "postgres" ] }
 dotenv = "0.15.0"
 env_logger = "0.10.0"
