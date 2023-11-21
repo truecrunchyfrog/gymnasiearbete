@@ -11,7 +11,7 @@ mod schema;
 mod server;
 mod tasks;
 
-use crate::database::connection::connect_to_db;
+use crate::{database::connection::connect_to_db, tasks::start_task_thread,};
 use axum::{
     routing::{get, post},
     Router,
@@ -23,11 +23,13 @@ use diesel::{
 };
 use env_logger::Builder;
 use log::LevelFilter;
-use std::net::SocketAddr;
+use tasks::TaskManager;
+use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
 #[derive(Clone)]
 pub struct AppState {
-    db: Pool<ConnectionManager<PgConnection>>
+    db: Pool<ConnectionManager<PgConnection>>,
+    tm: Arc<Mutex<TaskManager>>
 }
 
 #[tokio::main]
@@ -46,8 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = connect_to_db().await;
     info!("Connecting to database!");
 
+    let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
+    start_task_thread(task_manager.clone());
+
     let state = AppState {
         db: database,
+        tm: task_manager
     };
 
     info!("Starting axum router");

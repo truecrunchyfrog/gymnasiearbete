@@ -4,13 +4,16 @@ use crate::database::connection::{
 use crate::files::get_extension_from_filename;
 
 use crate::AppState;
+use crate::tasks::ExampleTask;
 use axum::extract::{Multipart, State};
 use axum::{debug_handler, Json};
 
+use diesel::PgConnection;
 use http::StatusCode;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -52,7 +55,8 @@ pub async fn upload(
 }
 
 // basic handler that responds with a static string
-pub async fn root() -> &'static str {
+pub async fn root(State(state): State<AppState>) -> &'static str {
+    let _task = ExampleTask::new(&state.tm, state.db);
     "Hello, World!"
 }
 
