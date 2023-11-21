@@ -11,7 +11,7 @@ mod schema;
 mod server;
 mod tasks;
 
-use crate::{database::connection::connect_to_db, tasks::JobSystem};
+use crate::database::connection::connect_to_db;
 use axum::{
     routing::{get, post},
     Router,
@@ -27,8 +27,7 @@ use std::net::SocketAddr;
 
 #[derive(Clone)]
 pub struct AppState {
-    db: Pool<ConnectionManager<PgConnection>>,
-    jobs: JobSystem,
+    db: Pool<ConnectionManager<PgConnection>>
 }
 
 #[tokio::main]
@@ -49,7 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState {
         db: database,
-        jobs: None,
     };
 
     info!("Starting axum router");
