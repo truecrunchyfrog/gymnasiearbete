@@ -15,10 +15,6 @@ pub enum Buildstatus {
     Failed,
 }
 
-pub mod exports {
-    pub use super::Buildstatus;
-}
-
 #[derive(Insertable, Queryable)]
 #[diesel(table_name = users)]
 pub struct NewUser {

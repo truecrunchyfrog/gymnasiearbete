@@ -1,23 +1,21 @@
-use diesel::PgConnection;
+use async_trait::async_trait;
 use diesel::r2d2::ConnectionManager;
+use diesel::PgConnection;
 use r2d2::Pool;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
-use tokio::time::Duration;
 use tokio::time::sleep;
-use async_trait::async_trait;
-use crate::database::connection::get_connection;
+use tokio::time::Duration;
 
 pub struct TaskManager {
-    pub tasks: Vec<Box<dyn Task + Send>>
+    pub tasks: Vec<Box<dyn Task + Send>>,
 }
 
 pub enum TaskResult {
     Completed,
     InvalidArguments(String),
-    Failed(String)
+    Failed(String),
 }
-
 
 impl TaskManager {
     async fn run_next(&mut self) {
@@ -28,10 +26,10 @@ impl TaskManager {
             match task_result.await {
                 Ok(k) => match k {
                     TaskResult::Completed => info!("Task completed!"),
-                    TaskResult::Failed(e) => warn!("Task failed: {}",e),
-                    TaskResult::InvalidArguments(e) => error!("Task is missing argument! {}" ,e)
+                    TaskResult::Failed(e) => warn!("Task failed: {}", e),
+                    TaskResult::InvalidArguments(e) => error!("Task is missing argument! {}", e),
                 },
-                Err(e) => error!("{}", e)
+                Err(e) => error!("{}", e),
             }
         }
     }
@@ -41,7 +39,7 @@ impl TaskManager {
 }
 
 pub struct ExampleTask {
-    db: Pool<ConnectionManager<PgConnection>>
+    db: Pool<ConnectionManager<PgConnection>>,
 }
 
 #[async_trait]
@@ -49,20 +47,18 @@ pub trait Task: Send {
     async fn run(&self) -> Result<TaskResult, Box<dyn Error>>;
 }
 
-
 #[async_trait]
 impl Task for ExampleTask {
     async fn run(&self) -> Result<TaskResult, Box<dyn Error>> {
-
         Ok(TaskResult::Completed)
     }
 }
 
 impl ExampleTask {
     pub fn new(tm: &Arc<Mutex<TaskManager>>, db: Pool<ConnectionManager<PgConnection>>) {
-        let t = Box::new(ExampleTask {db});
+        let t = Box::new(ExampleTask { db });
         let mut tm = tm.lock().unwrap();
-        tm.tasks.push(t);
+        tm.add_task(t);
     }
 }
 

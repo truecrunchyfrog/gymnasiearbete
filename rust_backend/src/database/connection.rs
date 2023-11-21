@@ -1,4 +1,4 @@
-use crate::models::NewUser;
+use crate::database::models::NewUser;
 use crate::schema::files;
 use crate::Pool;
 use chrono::NaiveDateTime;
@@ -33,7 +33,7 @@ pub struct InsertedFile {
     pub lastchanges: NaiveDateTime,
     pub file_content: Option<Vec<u8>>,
     pub owner_uuid: Uuid,
-    pub build_status: crate::models::Buildstatus,
+    pub build_status: crate::database::models::Buildstatus,
 }
 
 pub async fn create_user(conn: &mut PgConnection) -> Result<Uuid, diesel::result::Error> {
@@ -72,7 +72,7 @@ pub async fn upload_file(
         lastchanges: NaiveDateTime::default(),
         file_content: Some(file_content),
         owner_uuid: user_uuid,
-        build_status: crate::models::Buildstatus::NotStarted,
+        build_status: crate::database::models::Buildstatus::NotStarted,
     };
 
     let file_id = diesel::insert_into(files::table)
@@ -86,7 +86,7 @@ pub async fn upload_file(
 pub async fn get_build_status(
     conn: &mut PgConnection,
     file_id: Uuid,
-) -> Result<crate::models::Buildstatus, diesel::result::Error> {
+) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
     use crate::schema::files::dsl::*;
 
     let result = files
@@ -100,8 +100,8 @@ pub async fn get_build_status(
 pub fn update_build_status(
     conn: &mut PgConnection,
     file_id: Uuid,
-    new_status: crate::models::Buildstatus,
-) -> Result<crate::models::Buildstatus, diesel::result::Error> {
+    new_status: crate::database::models::Buildstatus,
+) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
     use crate::schema::files::dsl::*;
     diesel::update(files.filter(id.eq(file_id)))
         .set(build_status.eq(new_status))
@@ -110,7 +110,7 @@ pub fn update_build_status(
     let updated_status = files
         .filter(id.eq(file_id))
         .select(build_status)
-        .first::<crate::models::Buildstatus>(conn);
+        .first::<crate::database::models::Buildstatus>(conn);
 
     updated_status
 }

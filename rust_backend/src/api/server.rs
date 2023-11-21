@@ -1,19 +1,18 @@
 use crate::database::connection::{
     get_build_status, get_connection, update_build_status, upload_file,
 };
-use crate::files::get_extension_from_filename;
+use crate::utils::get_extension_from_filename;
 
-use crate::AppState;
 use crate::tasks::ExampleTask;
+use crate::AppState;
 use axum::extract::{Multipart, State};
 use axum::{debug_handler, Json};
 
-use diesel::PgConnection;
 use http::StatusCode;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -64,10 +63,10 @@ pub async fn root(State(state): State<AppState>) -> &'static str {
 pub async fn return_build_status(
     State(state): State<AppState>,
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
-) -> Result<axum::Json<crate::models::Buildstatus>, StatusCode> {
+) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
     let mut conn = get_connection(&state.db).await.unwrap();
     let status = get_build_status(&mut conn, file_id).await;
-    let _ = update_build_status(&mut conn, file_id, crate::models::Buildstatus::Started);
+    let _ = update_build_status(&mut conn, file_id, crate::database::Buildstatus::Started);
     match status {
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),
