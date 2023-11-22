@@ -15,8 +15,8 @@ struct UploadForm<'a> {
 }
 
 #[post("/upload-file", data = "<form>")]
-fn index(form: Form<UploadForm>) -> Status {
-    Status::BadRequest
+fn index(form: Form<UploadForm>) -> &'static str {
+    "Hallå"
 }
 
 #[launch]
