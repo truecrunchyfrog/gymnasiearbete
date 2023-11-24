@@ -1,5 +1,6 @@
 use crate::database::models::NewUser;
 use crate::schema::files;
+use crate::schema::users;
 use crate::Pool;
 use chrono::NaiveDateTime;
 use diesel::{prelude::*, r2d2::ConnectionManager};
@@ -36,19 +37,19 @@ pub struct InsertedFile {
     pub build_status: crate::database::models::Buildstatus,
 }
 
-pub async fn create_user(conn: &mut PgConnection) -> Result<Uuid, diesel::result::Error> {
-    let new_id = uuid::Uuid::new_v4();
-    let new_user = NewUser {
-        id: new_id, /*, other fields...*/
-    };
+pub async fn create_user(
+    conn: &mut PgConnection,
+    new_user: NewUser,
+) -> Result<Uuid, diesel::result::Error> {
     diesel::insert_into(crate::schema::users::table)
         .values(&new_user)
         .execute(conn)?;
-    Ok(new_id)
+    Ok(new_user.id)
 }
 
 pub async fn upload_file(
     conn: &mut PgConnection,
+    user_uuid: Uuid,
     filename: &str,
     file_path: &str,
     language: &String,
@@ -60,7 +61,6 @@ pub async fn upload_file(
     let mut file_content = Vec::new();
     file.read_to_end(&mut file_content)
         .map_err(|_err| diesel::result::Error::NotFound)?;
-    let user_uuid = create_user(conn).await?;
 
     let file_size = file_content.len() as i32;
 
@@ -113,4 +113,19 @@ pub fn update_build_status(
         .first::<crate::database::models::Buildstatus>(conn);
 
     updated_status
+}
+
+pub fn username_exists(
+    conn: &mut PgConnection,
+    target_username: &str,
+) -> Result<bool, diesel::result::Error> {
+    use crate::schema::users::dsl::*;
+    let result = users
+        .filter(username.eq(target_username))
+        .select(id)
+        .first::<Uuid>(conn);
+    match result {
+        Ok(_) => return Ok(true),
+        Err(_) => return Ok(false),
+    }
 }

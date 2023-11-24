@@ -6,6 +6,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
 use tokio::time::Duration;
+use uuid::Uuid;
 
 pub struct TaskManager {
     pub tasks: Vec<Box<dyn Task + Send>>,
@@ -42,6 +43,10 @@ pub struct ExampleTask {
     db: Pool<ConnectionManager<PgConnection>>,
 }
 
+pub struct BuildImageTask {
+    file_id: Uuid,
+}
+
 #[async_trait]
 pub trait Task: Send {
     async fn run(&self) -> Result<TaskResult, Box<dyn Error>>;
@@ -57,6 +62,27 @@ impl Task for ExampleTask {
 impl ExampleTask {
     pub fn new(tm: &Arc<Mutex<TaskManager>>, db: Pool<ConnectionManager<PgConnection>>) {
         let t = Box::new(ExampleTask { db });
+        let mut tm = tm.lock().unwrap();
+        tm.add_task(t);
+    }
+}
+
+#[async_trait]
+impl Task for BuildImageTask {
+    async fn run(&self) -> Result<TaskResult, Box<dyn Error>> {
+        // Update database of file to mark that build has started
+        // Download the file from the database
+        // Send path to docker component
+        // await result
+        // return it
+
+        Ok(TaskResult::Completed)
+    }
+}
+
+impl BuildImageTask {
+    pub fn new(tm: &Arc<Mutex<TaskManager>>, file_id: Uuid) {
+        let t = Box::new(BuildImageTask { file_id });
         let mut tm = tm.lock().unwrap();
         tm.add_task(t);
     }
@@ -79,7 +105,6 @@ pub fn start_task_thread(tm: Arc<Mutex<TaskManager>>) {
                             });
                         });
                     }
-                    // tm_guard is automatically dropped here, releasing the lock
                 }
             }
         });

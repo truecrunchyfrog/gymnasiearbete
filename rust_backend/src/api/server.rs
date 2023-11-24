@@ -41,8 +41,11 @@ pub async fn upload(
 
         file.write_all(&data).expect("Failed to write file");
         // Pass path_str by value
+
+        let user_uuid = Uuid::new_v4();
+
         let mut conn = get_connection(&state.db).await.unwrap();
-        let upload = upload_file(&mut conn, &name, &path_str, &"c".to_string()).await;
+        let upload = upload_file(&mut conn, user_uuid, &name, &path_str, &"c".to_string()).await;
         match upload {
             Ok(f_id) => return Ok(Json(f_id)),
             Err(e) => error!("{}", e),
