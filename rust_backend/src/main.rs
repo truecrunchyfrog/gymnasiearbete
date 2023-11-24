@@ -62,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(api::root))
         .route("/upload", post(api::upload))
         .route("/status/:fileid", get(api::return_build_status))
+        .route("/register", post(api::register_account))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

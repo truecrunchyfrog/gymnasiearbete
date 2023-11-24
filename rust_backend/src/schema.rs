@@ -25,6 +25,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    session_tokens (id) {
+        id -> Int4,
+        #[max_length = 255]
+        token -> Varchar,
+        user_uuid -> Uuid,
+        creation_date -> Nullable<Timestamp>,
+        expiration_date -> Timestamp,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         #[max_length = 255]
@@ -37,8 +48,10 @@ diesel::table! {
 }
 
 diesel::joinable!(files -> users (owner_uuid));
+diesel::joinable!(session_tokens -> users (user_uuid));
 
 diesel::allow_tables_to_appear_in_same_query!(
     files,
+    session_tokens,
     users,
 );
