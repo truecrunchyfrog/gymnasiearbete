@@ -1,7 +1,7 @@
 use crate::database::connection::{
-    get_build_status, get_connection, update_build_status, upload_file,
+    get_build_status, update_build_status, upload_file,
 };
-use crate::utils::get_extension_from_filename;
+use crate::utils::{get_extension_from_filename, create_file};
 
 use crate::tasks::ExampleTask;
 use crate::AppState;
@@ -43,9 +43,8 @@ pub async fn upload(
         // Pass path_str by value
 
         let user_uuid = Uuid::new_v4();
-
-        let mut conn = get_connection(&state.db).await.unwrap();
-        let upload = upload_file(&mut conn, user_uuid, &name, &path_str, &"c".to_string()).await;
+        let file = create_file(&name, &path_str, &"c".to_string(),user_uuid);
+        let upload = upload_file(file).await;
         match upload {
             Ok(f_id) => return Ok(Json(f_id)),
             Err(e) => error!("{}", e),
@@ -58,18 +57,16 @@ pub async fn upload(
 
 // basic handler that responds with a static string
 pub async fn root(State(state): State<AppState>) -> &'static str {
-    let _task = ExampleTask::new(&state.tm, state.db);
+    let _task = ExampleTask::new(&state.tm);
     "Hello, World!"
 }
 
 #[debug_handler]
 pub async fn return_build_status(
-    State(state): State<AppState>,
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
-    let mut conn = get_connection(&state.db).await.unwrap();
-    let status = get_build_status(&mut conn, file_id).await;
-    let _ = update_build_status(&mut conn, file_id, crate::database::Buildstatus::Started);
+    let status = get_build_status(file_id).await;
+    let _ = update_build_status(file_id, crate::database::Buildstatus::Started);
     match status {
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),

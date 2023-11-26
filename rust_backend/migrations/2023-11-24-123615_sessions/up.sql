@@ -1,8 +1,8 @@
 CREATE TABLE session_tokens (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
     token VARCHAR(255) NOT NULL,
     user_uuid UUID NOT NULL,
-    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     expiration_date TIMESTAMP NOT NULL
 );
 

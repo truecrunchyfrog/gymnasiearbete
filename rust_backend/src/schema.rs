@@ -26,11 +26,11 @@ diesel::table! {
 
 diesel::table! {
     session_tokens (id) {
-        id -> Int4,
+        id -> Uuid,
         #[max_length = 255]
         token -> Varchar,
         user_uuid -> Uuid,
-        creation_date -> Nullable<Timestamp>,
+        creation_date -> Timestamp,
         expiration_date -> Timestamp,
     }
 }

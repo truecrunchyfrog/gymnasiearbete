@@ -7,16 +7,12 @@ mod schema;
 pub mod tasks;
 mod utils;
 
-use crate::{database::connection::connect_to_db, tasks::start_task_thread};
+use crate::tasks::start_task_thread;
 use axum::{
     routing::{get, post},
     Router,
 };
 
-use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    PgConnection,
-};
 use env_logger::Builder;
 use log::LevelFilter;
 use std::{
@@ -25,9 +21,9 @@ use std::{
 };
 use tasks::TaskManager;
 
+
 #[derive(Clone)]
 pub struct AppState {
-    db: Pool<ConnectionManager<PgConnection>>,
     tm: Arc<Mutex<TaskManager>>,
 }
 
@@ -44,14 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
 
-    let database = connect_to_db().await;
-    info!("Connecting to database!");
-
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());
 
     let state = AppState {
-        db: database,
         tm: task_manager,
     };
 
@@ -63,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/upload", post(api::upload))
         .route("/status/:fileid", get(api::return_build_status))
         .route("/register", post(api::register_account))
+        .route("/login", post(api::log_in_user))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

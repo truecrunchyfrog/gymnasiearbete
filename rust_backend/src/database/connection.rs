@@ -1,131 +1,124 @@
-use crate::database::models::NewUser;
-use crate::schema::files;
-use crate::schema::users;
-use crate::Pool;
+use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile};
+
 use chrono::NaiveDateTime;
-use diesel::{prelude::*, r2d2::ConnectionManager};
+use diesel::prelude::*;
 use dotenv::dotenv;
 use uuid::Uuid;
 
-pub async fn connect_to_db() -> Pool<ConnectionManager<PgConnection>> {
+
+pub async fn establish_connection() -> PgConnection {
     dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let config = ConnectionManager::<PgConnection>::new(database_url);
-    Pool::builder()
-        .test_on_check_out(true)
-        .build(config)
-        .expect("Could not build connection pool")
-}
-
-pub async fn get_connection(
-    pool: &Pool<ConnectionManager<PgConnection>>,
-) -> Result<r2d2::PooledConnection<ConnectionManager<PgConnection>>, r2d2::Error> {
-    let conn = pool.get();
-    return conn;
-}
-
-#[derive(Insertable, Queryable)]
-#[table_name = "files"]
-pub struct InsertedFile {
-    pub id: uuid::Uuid,
-    pub filename: String,
-    pub programming_language: String,
-    pub filesize: i32,
-    pub lastchanges: NaiveDateTime,
-    pub file_content: Option<Vec<u8>>,
-    pub owner_uuid: Uuid,
-    pub build_status: crate::database::models::Buildstatus,
+    PgConnection::establish(&database_url).expect(&format!("Failed to connect to database {}",database_url))
 }
 
 pub async fn create_user(
-    conn: &mut PgConnection,
     new_user: NewUser,
 ) -> Result<Uuid, diesel::result::Error> {
+    let mut conn = establish_connection().await;
     diesel::insert_into(crate::schema::users::table)
         .values(&new_user)
-        .execute(conn)?;
+        .execute(&mut conn)?;
     Ok(new_user.id)
 }
 
 pub async fn upload_file(
-    conn: &mut PgConnection,
-    user_uuid: Uuid,
-    filename: &str,
-    file_path: &str,
-    language: &String,
+    file: NewFile
 ) -> Result<Uuid, Box<dyn std::error::Error>> {
-    use std::fs::File;
-    use std::io::Read;
 
-    let mut file = File::open(file_path).map_err(|_err| diesel::result::Error::NotFound)?;
-    let mut file_content = Vec::new();
-    file.read_to_end(&mut file_content)
-        .map_err(|_err| diesel::result::Error::NotFound)?;
+    let mut conn = establish_connection().await;
 
-    let file_size = file_content.len() as i32;
-
-    let new_file = InsertedFile {
-        id: uuid::Uuid::new_v4(),
-        filename: filename.to_string(),
-        programming_language: language.to_string(),
-        filesize: file_size,
-        lastchanges: NaiveDateTime::default(),
-        file_content: Some(file_content),
-        owner_uuid: user_uuid,
-        build_status: crate::database::models::Buildstatus::NotStarted,
-    };
-
-    let file_id = diesel::insert_into(files::table)
-        .values(new_file)
-        .get_result::<InsertedFile>(conn)?;
+    use crate::schema::files::dsl::*;
+    
+    let file_id = diesel::insert_into(files)
+        .values(file)
+        .get_result::<InsertedFile>(&mut conn)?;
     info!("{}", file_id.id);
 
     Ok(file_id.id)
 }
 
 pub async fn get_build_status(
-    conn: &mut PgConnection,
     file_id: Uuid,
 ) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
     use crate::schema::files::dsl::*;
+
+    let mut conn = establish_connection().await;
 
     let result = files
         .filter(id.eq(file_id))
         .select(build_status)
-        .first(conn);
+        .first(&mut conn);
 
     result
 }
 
-pub fn update_build_status(
-    conn: &mut PgConnection,
+pub async fn update_build_status(
     file_id: Uuid,
     new_status: crate::database::models::Buildstatus,
 ) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
     use crate::schema::files::dsl::*;
+
+
+    let mut conn = establish_connection().await;
+
     diesel::update(files.filter(id.eq(file_id)))
         .set(build_status.eq(new_status))
-        .execute(conn)?;
+        .execute(&mut conn)?;
 
     let updated_status = files
         .filter(id.eq(file_id))
         .select(build_status)
-        .first::<crate::database::models::Buildstatus>(conn);
+        .first::<crate::database::models::Buildstatus>(&mut conn);
 
     updated_status
 }
 
-pub fn username_exists(
-    conn: &mut PgConnection,
+pub async fn username_exists(
     target_username: &str,
 ) -> Result<bool, diesel::result::Error> {
     use crate::schema::users::dsl::*;
+    let mut conn = establish_connection().await;
     let result = users
         .filter(username.eq(target_username))
         .select(id)
-        .first::<Uuid>(conn);
+        .first::<Uuid>(&mut conn);
     match result {
         Ok(_) => return Ok(true),
         Err(_) => return Ok(false),
     }
+}
+
+pub async fn get_user_from_username(username: &str) -> Result<User,diesel::result::Error> {
+    let mut conn = establish_connection().await;
+    use crate::schema::users::dsl::*;
+    let result = users
+        .filter(username.eq(username))
+        .first::<User>(&mut conn);
+    return result
+}
+
+pub struct UploadToken {
+    pub user_uuid: Uuid,
+    pub token: String,
+    pub expiration_date: NaiveDateTime
+}
+
+
+pub async fn upload_session_token(up_token: UploadToken) {
+    let mut conn = establish_connection().await;
+    use crate::schema::session_tokens::dsl::*;
+
+    let new_token = NewSessionToken{
+        token: &up_token.token,
+        user_uuid: up_token.user_uuid,
+        expiration_date: up_token.expiration_date
+
+    };
+
+
+    diesel::insert_into(session_tokens)
+        .values(new_token)
+        .execute(&mut conn)
+        .expect("Failed to insert session token");
 }

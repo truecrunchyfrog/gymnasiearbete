@@ -40,7 +40,7 @@ impl TaskManager {
 }
 
 pub struct ExampleTask {
-    db: Pool<ConnectionManager<PgConnection>>,
+
 }
 
 pub struct BuildImageTask {
@@ -60,8 +60,8 @@ impl Task for ExampleTask {
 }
 
 impl ExampleTask {
-    pub fn new(tm: &Arc<Mutex<TaskManager>>, db: Pool<ConnectionManager<PgConnection>>) {
-        let t = Box::new(ExampleTask { db });
+    pub fn new(tm: &Arc<Mutex<TaskManager>>) {
+        let t = Box::new(ExampleTask { });
         let mut tm = tm.lock().unwrap();
         tm.add_task(t);
     }

@@ -1,5 +1,5 @@
 use crate::{
-    database::{connection::get_connection, NewUser},
+    database::{connection::establish_connection, NewUser},
     AppState,
 };
 use argon2::{
@@ -13,6 +13,8 @@ use regex::Regex;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::{hash_password, HashSalt};
+
 #[derive(Deserialize)]
 pub struct SignUp {
     username: String,
@@ -20,7 +22,6 @@ pub struct SignUp {
 }
 
 pub async fn register_account(
-    State(state): State<AppState>,
     Form(sign_up): Form<SignUp>,
 ) -> StatusCode {
     // check username
@@ -31,10 +32,9 @@ pub async fn register_account(
     if !verify_password(&sign_up.password) {
         return StatusCode::NOT_ACCEPTABLE;
     }
-    let mut conn = get_connection(&state.db).await.unwrap();
     // check if username exists
     let username_exists =
-        crate::database::connection::username_exists(&mut conn, &sign_up.username);
+        crate::database::connection::username_exists(&sign_up.username).await;
     match username_exists {
         Ok(t) => match t {
             true => return StatusCode::NOT_ACCEPTABLE,
@@ -53,7 +53,7 @@ pub async fn register_account(
         }
     }
 
-    let upload = upload_user(&sign_up.username, password_hash, &mut conn).await;
+    let upload = upload_user(&sign_up.username, password_hash).await;
     match upload {
         Ok(_) => return StatusCode::ACCEPTED,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
@@ -66,20 +66,20 @@ fn verify_username(username: &str) -> bool {
 }
 
 fn verify_password(password: &str) -> bool {
-    let re = Regex::new(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$")
-        .unwrap();
-    return re.is_match(password);
+    let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_special = password.chars().any(|c| "@$!%*?&".contains(c));
+    let is_length_valid = password.len() >= 8;
+
+    has_lowercase && has_uppercase && has_digit && has_special && is_length_valid
 }
 
-struct HashSalt {
-    hash: String,
-    salt: String,
-}
+
 
 async fn upload_user(
     username: &str,
     hash_combo: HashSalt,
-    conn: &mut PgConnection,
 ) -> Result<Uuid, diesel::result::Error> {
     let new_user = NewUser {
         id: Uuid::new_v4(),
@@ -87,17 +87,6 @@ async fn upload_user(
         password_hash: hash_combo.hash,
         salt: hash_combo.salt,
     };
-    crate::database::connection::create_user(conn, new_user).await
+    crate::database::connection::create_user(new_user).await
 }
 
-fn hash_password(pass: &str) -> Result<HashSalt, argon2::password_hash::Error> {
-    let password = pass.as_bytes();
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(password, &salt)?.to_string();
-    let salt_str = salt.to_string();
-    return Ok(HashSalt {
-        hash: password_hash,
-        salt: salt_str,
-    });
-}
