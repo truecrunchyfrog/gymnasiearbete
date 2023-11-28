@@ -1,4 +1,4 @@
-use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile, Token};
+use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile};
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -89,7 +89,7 @@ pub async fn username_exists(
     }
 }
 
-pub async fn get_user_from_username(username: &str) -> Result<User,diesel::result::Error> {
+pub async fn get_user_from_username(_username: &str) -> Result<User,diesel::result::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::users::dsl::*;
     let result = users
@@ -138,6 +138,6 @@ pub async fn get_token_owner(token_str: &str) -> Result<User,diesel::result::Err
     let result = session_tokens
         .filter(token.eq(token_str))
         .first::<SessionToken>(&mut conn)?;
-    let user = result.id;
+    let user = result.user_uuid;
     return get_user(user).await;
 }

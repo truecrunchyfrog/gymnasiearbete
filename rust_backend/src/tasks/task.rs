@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use diesel::r2d2::ConnectionManager;
-use diesel::PgConnection;
-use r2d2::Pool;
+
+
+
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;

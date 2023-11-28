@@ -11,7 +11,7 @@ use axum::{debug_handler, Json};
 
 use http::header::AUTHORIZATION;
 use http::StatusCode;
-use std::error::Error;
+
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 #[debug_handler]
 pub async fn upload(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<axum::Json<Uuid>, StatusCode> {
     while let Some(field) = multipart.next_field().await.unwrap() {
@@ -79,12 +79,15 @@ pub async fn return_build_status(
 #[debug_handler]
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
-        Err(e) => return Err(StatusCode::UNAUTHORIZED),
+        Err(_e) => return Err(StatusCode::UNAUTHORIZED),
         Ok(t) => t,
     };
     let user = match get_token_owner(&token).await {
         Ok(u) => u,
-        Err(e) => return Err(StatusCode::NO_CONTENT),
+        Err(e) => {
+            error!("{}",e);
+            return Err(StatusCode::NO_CONTENT)
+        },
     };
     return Ok(Json(user));
 }

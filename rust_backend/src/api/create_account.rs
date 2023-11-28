@@ -1,13 +1,6 @@
-use crate::{
-    database::{connection::establish_connection, NewUser},
-    AppState,
-};
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-use axum::{extract::State, Form};
-use diesel::PgConnection;
+use crate::database::NewUser;
+
+use axum::Form;
 use http::StatusCode;
 use regex::Regex;
 use serde::Deserialize;
@@ -56,7 +49,10 @@ pub async fn register_account(
     let upload = upload_user(&sign_up.username, password_hash).await;
     match upload {
         Ok(_) => return StatusCode::ACCEPTED,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+        Err(e) => {
+            error!("{}",e);
+            return StatusCode::INTERNAL_SERVER_ERROR
+        },
     }
 }
 
