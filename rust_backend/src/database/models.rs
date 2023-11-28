@@ -24,7 +24,7 @@ pub struct NewUser {
     pub salt: String,
 }
 
-#[derive(Queryable, Selectable, Insertable, Debug)]
+#[derive(Queryable, Selectable, Insertable, Debug, Serialize)]
 #[diesel(table_name = users)]
 pub struct User {
     pub id: Uuid,

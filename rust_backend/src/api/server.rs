@@ -1,15 +1,16 @@
 use crate::database::connection::{
-    get_build_status, update_build_status, upload_file, get_token_owner,
+    get_build_status, get_token_owner, update_build_status, upload_file,
 };
-use crate::utils::{get_extension_from_filename, create_file};
+use crate::database::User;
+use crate::utils::{create_file, get_extension_from_filename};
 
 use crate::tasks::ExampleTask;
 use crate::AppState;
 use axum::extract::{Multipart, State};
 use axum::{debug_handler, Json};
 
-use http::StatusCode;
 use http::header::AUTHORIZATION;
+use http::StatusCode;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -45,7 +46,7 @@ pub async fn upload(
         // Pass path_str by value
 
         let user_uuid = Uuid::new_v4();
-        let file = create_file(&name, &path_str, &"c".to_string(),user_uuid);
+        let file = create_file(&name, &path_str, &"c".to_string(), user_uuid);
         let upload = upload_file(file).await;
         match upload {
             Ok(f_id) => return Ok(Json(f_id)),
@@ -75,26 +76,23 @@ pub async fn return_build_status(
     }
 }
 
-pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<axum::Json<crate::database::User>, StatusCode> {
+#[debug_handler]
+pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
-        Err(e) => Err(StatusCode::UNAUTHORIZED),
-        Ok(t) => Ok(t),
-    }.unwrap();
+        Err(e) => return Err(StatusCode::UNAUTHORIZED),
+        Ok(t) => t,
+    };
     let user = match get_token_owner(&token).await {
         Ok(u) => u,
-        Err(e) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => return Err(StatusCode::NO_CONTENT),
     };
     return Ok(Json(user));
 }
 
-async fn get_token(headers: axum::http::HeaderMap) -> Result<String,StatusCode>{
-    let session_token = match headers.get(AUTHORIZATION) {
-        Some(value) => {
-            // Assuming the session token is in the Authorization header.
-            // You might need to adapt this based on your authentication mechanism.
-            value.to_str().ok().unwrap_or_default().to_string()
-        }
+#[debug_handler]
+async fn get_token(headers: axum::http::HeaderMap) -> Result<String, StatusCode> {
+    match headers.get(AUTHORIZATION) {
+        Some(value) => return Ok(value.to_str().ok().unwrap_or_default().to_string()),
         None => return Err(axum::http::StatusCode::UNAUTHORIZED),
     };
-    return Ok(session_token);
 }
