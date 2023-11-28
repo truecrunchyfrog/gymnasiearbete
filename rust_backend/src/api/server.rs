@@ -1,5 +1,5 @@
 use crate::database::connection::{
-    get_build_status, update_build_status, upload_file,
+    get_build_status, update_build_status, upload_file, get_token_owner,
 };
 use crate::utils::{get_extension_from_filename, create_file};
 
@@ -9,6 +9,8 @@ use axum::extract::{Multipart, State};
 use axum::{debug_handler, Json};
 
 use http::StatusCode;
+use http::header::AUTHORIZATION;
+use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -71,4 +73,28 @@ pub async fn return_build_status(
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),
     }
+}
+
+pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<axum::Json<crate::database::User>, StatusCode> {
+    let token = match get_token(headers).await {
+        Err(e) => Err(StatusCode::UNAUTHORIZED),
+        Ok(t) => Ok(t),
+    }.unwrap();
+    let user = match get_token_owner(&token).await {
+        Ok(u) => u,
+        Err(e) => return Err(StatusCode::NOT_FOUND),
+    };
+    return Ok(Json(user));
+}
+
+async fn get_token(headers: axum::http::HeaderMap) -> Result<String,StatusCode>{
+    let session_token = match headers.get(AUTHORIZATION) {
+        Some(value) => {
+            // Assuming the session token is in the Authorization header.
+            // You might need to adapt this based on your authentication mechanism.
+            value.to_str().ok().unwrap_or_default().to_string()
+        }
+        None => return Err(axum::http::StatusCode::UNAUTHORIZED),
+    };
+    return Ok(session_token);
 }

@@ -1,4 +1,4 @@
-use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile};
+use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile, Token};
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -121,4 +121,23 @@ pub async fn upload_session_token(up_token: UploadToken) {
         .values(new_token)
         .execute(&mut conn)
         .expect("Failed to insert session token");
+}
+
+pub async fn get_user(user_id: Uuid) -> Result<User,diesel::result::Error> {
+    let mut conn = establish_connection().await;
+    use crate::schema::users::dsl::*;
+    let result = users
+        .filter(id.eq(user_id))
+        .first::<User>(&mut conn);
+    return result
+}
+
+pub async fn get_token_owner(token_str: &str) -> Result<User,diesel::result::Error> {
+    let mut conn = establish_connection().await;
+    use crate::schema::session_tokens::dsl::*;
+    let result = session_tokens
+        .filter(token.eq(token_str))
+        .first::<SessionToken>(&mut conn)?;
+    let user = result.id;
+    return get_user(user).await;
 }

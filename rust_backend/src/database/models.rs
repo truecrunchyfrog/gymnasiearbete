@@ -2,7 +2,6 @@ use crate::schema::*;
 use chrono::NaiveDateTime;
 
 use diesel::Insertable;
-use diesel::sql_types::Timestamp;
 use diesel::{sql_types::Nullable, Queryable, Selectable};
 use serde::Serialize;
 use uuid::Uuid;
@@ -89,4 +88,10 @@ pub struct NewSessionToken<'a> {
     pub token: &'a str,
     pub user_uuid: Uuid,
     pub expiration_date: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = session_tokens)]
+pub struct Token<'a> {
+    pub token: &'a str,
 }

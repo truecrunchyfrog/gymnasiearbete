@@ -5,7 +5,6 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
 use crate::database::connection::{get_user_from_username, upload_session_token, UploadToken};
-
 use super::{hash_password, check_password};
 
 #[derive(Deserialize)]

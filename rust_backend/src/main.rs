@@ -56,6 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/status/:fileid", get(api::return_build_status))
         .route("/register", post(api::register_account))
         .route("/login", post(api::log_in_user))
+        .route("/profile", get(api::get_user_info))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -64,6 +65,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await?;
-
-    Ok(())
+        Ok(())
 }
