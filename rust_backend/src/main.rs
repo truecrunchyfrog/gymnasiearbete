@@ -5,7 +5,8 @@ mod database;
 mod docker;
 mod schema;
 pub mod tasks;
-mod utils;
+pub mod utils;
+use utils::Error;
 
 use crate::tasks::start_task_thread;
 use axum::{
@@ -20,7 +21,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tasks::TaskManager;
-
 
 #[derive(Clone)]
 pub struct AppState {
@@ -43,9 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());
 
-    let state = AppState {
-        tm: task_manager,
-    };
+    let state = AppState { tm: task_manager };
 
     info!("Starting axum router");
     // build our application with a route
@@ -65,5 +63,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await?;
-        Ok(())
+    Ok(())
 }
