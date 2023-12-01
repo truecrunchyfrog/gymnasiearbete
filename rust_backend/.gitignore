@@ -14,6 +14,7 @@ Cargo.lock
 *.pdb
 
 # Uploaded files
+/rust_server/upload/*
 upload/*
 .env
 .cargo/
