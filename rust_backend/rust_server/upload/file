@@ -1,0 +1,10 @@
+--7ce7e204eb994df9b3b164a220b052ba
+Content-Disposition: form-data; name="name"
+
+hello
+--7ce7e204eb994df9b3b164a220b052ba
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+hej hej
+--7ce7e204eb994df9b3b164a220b052ba--
