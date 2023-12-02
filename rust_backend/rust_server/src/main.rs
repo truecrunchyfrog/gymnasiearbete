@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/register", post(api::register_account))
         .route("/login", post(api::log_in_user))
         .route("/profile", get(api::get_user_info))
+        .route("/files", get(api::get_user_files))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

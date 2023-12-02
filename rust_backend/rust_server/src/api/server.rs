@@ -1,5 +1,5 @@
 use crate::database::connection::{
-    get_build_status, get_token_owner, update_build_status, upload_file,
+    get_build_status, get_files_from_user, get_token_owner, update_build_status, upload_file,
 };
 use crate::database::User;
 use crate::utils::{create_file, get_extension_from_filename};
@@ -76,7 +76,6 @@ pub async fn return_build_status(
     }
 }
 
-
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
         Err(_e) => return Err(StatusCode::UNAUTHORIZED),
@@ -85,9 +84,9 @@ pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>,
     let user = match get_token_owner(&token).await {
         Ok(u) => u,
         Err(e) => {
-            error!("{}",e);
-            return Err(StatusCode::NO_CONTENT)
-        },
+            error!("{}", e);
+            return Err(StatusCode::NO_CONTENT);
+        }
     };
     return Ok(Json(user));
 }
@@ -100,8 +99,14 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
 }
 
 #[debug_handler]
-async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<String>>, Error> {
-    let token =  get_token(headers).await?;
-    return  Err(Error::LoginFail);
-    
+pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<Uuid>>, Error> {
+    let token = get_token(headers).await?;
+    let user = get_token_owner(token.as_str())
+        .await
+        .expect("failed to get owner");
+    let files = get_files_from_user(user.id)
+        .await
+        .expect("failed to find files");
+    let json_str = Json(files);
+    return Ok(json_str);
 }
