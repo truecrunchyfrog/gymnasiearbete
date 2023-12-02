@@ -19,7 +19,8 @@ use std::path::Path;
 use std::time::SystemTime;
 use uuid::Uuid;
 
-#[debug_handler]
+use crate::Error;
+
 pub async fn upload(
     State(_state): State<AppState>,
     mut multipart: Multipart,
@@ -64,7 +65,6 @@ pub async fn root(State(state): State<AppState>) -> &'static str {
     "Hello, World!"
 }
 
-#[debug_handler]
 pub async fn return_build_status(
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
@@ -76,7 +76,7 @@ pub async fn return_build_status(
     }
 }
 
-#[debug_handler]
+
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
         Err(_e) => return Err(StatusCode::UNAUTHORIZED),
@@ -92,10 +92,16 @@ pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>,
     return Ok(Json(user));
 }
 
-#[debug_handler]
-async fn get_token(headers: axum::http::HeaderMap) -> Result<String, StatusCode> {
+async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
     match headers.get(AUTHORIZATION) {
         Some(value) => return Ok(value.to_str().ok().unwrap_or_default().to_string()),
-        None => return Err(axum::http::StatusCode::UNAUTHORIZED),
+        None => return Err(Error::LoginFail),
     };
+}
+
+#[debug_handler]
+async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<String>>, Error> {
+    let token =  get_token(headers).await?;
+    return  Err(Error::LoginFail);
+    
 }

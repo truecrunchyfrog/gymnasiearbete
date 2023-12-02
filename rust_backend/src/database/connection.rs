@@ -1,7 +1,8 @@
-use crate::database::{models::{User,NewFile,NewUser,SessionToken,NewSessionToken}, InsertedFile};
+use crate::database::models::{User,NewFile,NewUser,SessionToken,NewSessionToken,InsertedFile};
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use dotenv::dotenv;
 use uuid::Uuid;
 
@@ -141,3 +142,20 @@ pub async fn get_token_owner(token_str: &str) -> Result<User,diesel::result::Err
     let user = result.user_uuid;
     return get_user(user).await;
 }
+
+/* 
+pub async fn get_user_files(user_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error> {
+    let mut conn = establish_connection().await;
+    use crate::schema::files::dsl::*;
+    
+    let file_ids = files
+        .filter(owner_uuid.eq(user_id))
+        .select(id)
+        .load::<Uuid>(&mut conn);
+        
+    match file_ids {
+        Ok(ids) => Ok(ids),
+        Err(e) => Err(e),
+    }
+}
+*/

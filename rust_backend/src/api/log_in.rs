@@ -5,7 +5,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
 use crate::database::connection::{get_user_from_username, upload_session_token, UploadToken};
-use super::{check_password};
+use super::check_password;
 
 #[derive(Deserialize)]
 pub struct LogInInfo {
