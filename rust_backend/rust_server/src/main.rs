@@ -14,6 +14,7 @@ use axum::{
     Router,
 };
 
+use database::check_connection;
 use env_logger::Builder;
 use log::LevelFilter;
 use std::{
@@ -21,7 +22,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tasks::TaskManager;
-
 #[derive(Clone)]
 pub struct AppState {
     tm: Arc<Mutex<TaskManager>>,
@@ -39,6 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
+
+    check_connection().await?;
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());

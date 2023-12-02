@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 
-
-
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
@@ -39,12 +37,16 @@ impl TaskManager {
     }
 }
 
-pub struct ExampleTask {
-
-}
+pub struct ExampleTask {}
 
 pub struct BuildImageTask {
     file_id: Uuid,
+}
+
+impl dyn Task {
+    fn add_dependency(&self, deps: Box<dyn Task>) -> Result<(), Box<dyn Error>> {
+        todo!()
+    }
 }
 
 #[async_trait]
@@ -61,7 +63,7 @@ impl Task for ExampleTask {
 
 impl ExampleTask {
     pub fn new(tm: &Arc<Mutex<TaskManager>>) {
-        let t = Box::new(ExampleTask { });
+        let t = Box::new(ExampleTask {});
         let mut tm = tm.lock().unwrap();
         tm.add_task(t);
     }
