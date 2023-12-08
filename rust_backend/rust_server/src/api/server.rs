@@ -24,16 +24,26 @@ use crate::Error;
 pub async fn upload(
     State(_state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<axum::Json<Uuid>, StatusCode> {
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.file_name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
-        let extension = get_extension_from_filename(&name).unwrap();
+) -> Result<Json<Uuid>, StatusCode> {
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.file_name().map(|s| s.to_string());
+        let data_result = field.bytes().await;
+        let data;
+        match data_result {
+            Ok(o) => data = o,
+            Err(e) => {
+                error!("{:?}", e);
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+
+        let name = name.ok_or(StatusCode::BAD_REQUEST)?;
+        let extension = get_extension_from_filename(&name).ok_or(StatusCode::BAD_REQUEST)?;
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            .to_string();
+            .map(|d| d.as_secs().to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
         let path_str = format!("./upload/{}.{}", current_time, extension);
         let upload_dir: &Path = Path::new(&path_str);
 
@@ -41,22 +51,28 @@ pub async fn upload(
             .create(true)
             .write(true)
             .open(upload_dir)
-            .unwrap_or_else(|_| panic!("Failed to find path: {}", path_str));
+            .map_err(|e| {
+                error!("Failed to open file: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
-        file.write_all(&data).expect("Failed to write file");
-        // Pass path_str by value
+        file.write_all(&data).map_err(|e| {
+            error!("Failed to write file: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
         let user_uuid = Uuid::new_v4();
         let file = create_file(&name, &path_str, &"c".to_string(), user_uuid);
-        let upload = upload_file(file).await;
-        match upload {
-            Ok(f_id) => return Ok(Json(f_id)),
-            Err(e) => error!("{}", e),
-        }
 
-        return Err(StatusCode::NOT_ACCEPTABLE);
+        let upload = upload_file(file).await.map_err(|e| {
+            error!("Failed to upload file: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        return Ok(Json(upload));
     }
-    return Err(StatusCode::NOT_ACCEPTABLE);
+
+    Err(StatusCode::NOT_ACCEPTABLE)
 }
 
 // basic handler that responds with a static string
@@ -78,22 +94,30 @@ pub async fn return_build_status(
 
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
-        Err(_e) => return Err(StatusCode::UNAUTHORIZED),
+        Err(_e) => return Err(StatusCode::BAD_REQUEST),
         Ok(t) => t,
     };
+
+    // verify token structure
+    info!("{}", token);
+
     let user = match get_token_owner(&token).await {
         Ok(u) => u,
         Err(e) => {
             error!("Failed to get owner of token: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::BAD_REQUEST);
         }
     };
     return Ok(Json(user));
 }
 
 async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
+    // return Ok(Uuid::parse_str(value.to_str().ok()))
     match headers.get(AUTHORIZATION) {
-        Some(value) => return Ok(value.to_str().ok().unwrap_or_default().to_string()),
+        Some(value) => match value.to_str() {
+            Ok(o) => return Ok(o.to_string()),
+            Err(_e) => return Err(Error::TokenError),
+        },
         None => return Err(Error::LoginFail),
     };
 }
@@ -108,7 +132,7 @@ pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<U
             return Err(StatusCode::UNAUTHORIZED);
         }
     }
-    let user_result = get_token_owner(token.as_str()).await;
+    let user_result = get_token_owner(&token).await;
     let user: User;
     match user_result {
         Ok(u) => user = u,

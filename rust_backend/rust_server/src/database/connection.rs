@@ -30,13 +30,22 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid, Box<dyn std::error::Erro
 
     use crate::schema::files::dsl::*;
 
-    let file_id = diesel::insert_into(files)
+    info!("{:?}", file);
+
+    match diesel::insert_into(files)
         .values(file)
         .get_result::<InsertedFile>(&mut conn)
-        .await?;
-    info!("{}", file_id.id);
-
-    Ok(file_id.id)
+        .await
+    {
+        Ok(file_id) => {
+            info!("{}", file_id.id);
+            Ok(file_id.id)
+        }
+        Err(err) => {
+            error!("Error inserting file: {}", err);
+            Err(err.into())
+        }
+    }
 }
 
 pub async fn get_build_status(
@@ -131,15 +140,17 @@ pub async fn get_user(user_id: Uuid) -> Result<User, diesel::result::Error> {
     return result;
 }
 
-pub async fn get_token_owner(token_str: &str) -> Result<User, diesel::result::Error> {
+pub async fn get_token_owner(token_str: &String) -> Result<User, diesel::result::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::session_tokens::dsl::*;
-    let result = session_tokens
+    let result: Uuid = session_tokens
+        .select(user_uuid)
         .filter(token.eq(token_str))
-        .first::<SessionToken>(&mut conn)
+        .first(&mut conn)
         .await?;
-    let user = result.user_uuid;
-    return get_user(user).await;
+    // Log the entire SessionToken for debugging
+
+    return get_user(result).await;
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error> {

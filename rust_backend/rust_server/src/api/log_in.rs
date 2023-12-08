@@ -1,11 +1,11 @@
 use axum::Form;
-use chrono::{Utc, Duration, DateTime};
+use chrono::{DateTime, Duration, Utc};
 use http::StatusCode;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
-use crate::database::connection::{get_user_from_username, upload_session_token, UploadToken};
 use super::check_password;
+use crate::database::connection::{get_user_from_username, upload_session_token, UploadToken};
 
 #[derive(Deserialize)]
 pub struct LogInInfo {
@@ -13,6 +13,7 @@ pub struct LogInInfo {
     password: String,
 }
 
+#[allow(non_snake_case)]
 pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, StatusCode> {
     // get userid
     let user_id = get_user_from_username(&LogInInfo.username).await;
@@ -22,7 +23,10 @@ pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Sta
         Ok(u) => user = u,
     }
 
-    let hash_salt = super::HashSalt { hash: user.password_hash, salt: user.salt };
+    let hash_salt = super::HashSalt {
+        hash: user.password_hash,
+        salt: user.salt,
+    };
 
     //compare
     if !check_password(LogInInfo.password, hash_salt) {
@@ -32,13 +36,12 @@ pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Sta
     info!("Password matches");
     // Generate session token
     let token = generate_session_token();
-    let session_token = UploadToken{user_uuid: user.id,
+    let session_token = UploadToken {
+        user_uuid: user.id,
         token: token.clone(),
-        expiration_date: get_session_experation().naive_utc()
-
+        expiration_date: get_session_experation().naive_utc(),
     };
     upload_session_token(session_token).await;
-
 
     return Ok(token);
 }

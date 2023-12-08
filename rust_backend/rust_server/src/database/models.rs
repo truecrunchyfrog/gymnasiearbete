@@ -33,7 +33,7 @@ pub struct User {
     pub salt: String,
 }
 
-#[derive(Insertable, Queryable)]
+#[derive(Insertable, Queryable, Debug)]
 #[diesel(table_name = files)]
 pub struct NewFile {
     pub filename: String,
