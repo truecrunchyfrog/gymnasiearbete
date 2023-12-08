@@ -69,7 +69,7 @@ pub async fn return_build_status(
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
     let status = get_build_status(file_id).await;
-    let _ = update_build_status(file_id, crate::database::Buildstatus::Started);
+    let _ = update_build_status(file_id, crate::database::Buildstatus::Started).await;
     match status {
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),
@@ -84,8 +84,8 @@ pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>,
     let user = match get_token_owner(&token).await {
         Ok(u) => u,
         Err(e) => {
-            error!("{}", e);
-            return Err(StatusCode::NO_CONTENT);
+            error!("Failed to get owner of token: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
     return Ok(Json(user));
@@ -99,14 +99,33 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
 }
 
 #[debug_handler]
-pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<Uuid>>, Error> {
-    let token = get_token(headers).await?;
-    let user = get_token_owner(token.as_str())
-        .await
-        .expect("failed to get owner");
-    let files = get_files_from_user(user.id)
-        .await
-        .expect("failed to find files");
+pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<Uuid>>, StatusCode> {
+    let token: String;
+    match get_token(headers).await {
+        Ok(o) => token = o,
+        Err(e) => {
+            error!("Failed to get token: {:?}", e);
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+    let user_result = get_token_owner(token.as_str()).await;
+    let user: User;
+    match user_result {
+        Ok(u) => user = u,
+        Err(e) => {
+            error!("Failed to find user! {}", e);
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+
+    let files: Vec<Uuid>;
+    match get_files_from_user(user.id).await {
+        Ok(o) => files = o,
+        Err(e) => {
+            error!("Failed get users files! {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
     let json_str = Json(files);
     return Ok(json_str);
 }
