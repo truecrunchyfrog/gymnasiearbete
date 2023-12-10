@@ -10,7 +10,7 @@ use axum::extract::{Multipart, State};
 use axum::{debug_handler, Json};
 
 use http::header::AUTHORIZATION;
-use http::StatusCode;
+use http::{HeaderMap, StatusCode};
 
 use std::fs;
 use std::io::Write;
@@ -21,8 +21,10 @@ use uuid::Uuid;
 
 use crate::Error;
 
+#[debug_handler]
 pub async fn upload(
     State(_state): State<AppState>,
+    headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<Uuid>, StatusCode> {
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -61,8 +63,10 @@ pub async fn upload(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-        let user_uuid = Uuid::new_v4();
-        let file = create_file(&name, &path_str, &"c".to_string(), user_uuid);
+        // we need to get the users id here
+        let user = get_user_from_token(headers).await?;
+
+        let file = create_file(&name, &path_str, &"c".to_string(), user.id);
 
         let upload = upload_file(file).await.map_err(|e| {
             error!("Failed to upload file: {}", e);
@@ -85,11 +89,26 @@ pub async fn return_build_status(
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
     let status = get_build_status(file_id).await;
-    let _ = update_build_status(file_id, crate::database::Buildstatus::Started).await;
+    // let _ = update_build_status(file_id, crate::database::Buildstatus::Started).await;
     match status {
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),
     }
+}
+
+pub async fn get_user_from_token(headers: HeaderMap) -> Result<User, StatusCode> {
+    let token = match get_token(headers).await {
+        Err(_e) => return Err(StatusCode::UNAUTHORIZED),
+        Ok(t) => t,
+    };
+
+    match get_token_owner(&token).await {
+        Ok(u) => return Ok(u),
+        Err(e) => {
+            error!("Failed to get owner of token: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
 }
 
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
