@@ -1,5 +1,5 @@
 use crate::database::connection::{
-    get_build_status, get_files_from_user, get_token_owner, update_build_status, upload_file,
+    get_build_status, get_files_from_user, get_token_owner, upload_file,
 };
 use crate::database::User;
 use crate::utils::{create_file, get_extension_from_filename};
@@ -7,10 +7,9 @@ use crate::utils::{create_file, get_extension_from_filename};
 use crate::tasks::ExampleTask;
 use crate::AppState;
 use axum::extract::{Multipart, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::http::header::AUTHORIZATION;
 use axum::{debug_handler, Json};
-
-use http::header::AUTHORIZATION;
-use http::{HeaderMap, StatusCode};
 
 use std::fs;
 use std::io::Write;
@@ -28,9 +27,11 @@ pub async fn upload(
     mut multipart: Multipart,
 ) -> Result<Json<Uuid>, StatusCode> {
     while let Ok(Some(field)) = multipart.next_field().await {
+        
         let name = field.file_name().map(|s| s.to_string());
         let data_result = field.bytes().await;
         let data;
+        
         match data_result {
             Ok(o) => data = o,
             Err(e) => {
@@ -41,6 +42,7 @@ pub async fn upload(
 
         let name = name.ok_or(StatusCode::BAD_REQUEST)?;
         let extension = get_extension_from_filename(&name).ok_or(StatusCode::BAD_REQUEST)?;
+        
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs().to_string())
@@ -63,7 +65,6 @@ pub async fn upload(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-        // we need to get the users id here
         let user = get_user_from_token(headers).await?;
 
         let file = create_file(&name, &path_str, &"c".to_string(), user.id);
@@ -80,16 +81,17 @@ pub async fn upload(
 }
 
 // basic handler that responds with a static string
+#[debug_handler]
 pub async fn root(State(state): State<AppState>) -> &'static str {
     let _task = ExampleTask::new(&state.tm);
     "Hello, World!"
 }
 
+#[debug_handler]
 pub async fn return_build_status(
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>, StatusCode> {
     let status = get_build_status(file_id).await;
-    // let _ = update_build_status(file_id, crate::database::Buildstatus::Started).await;
     match status {
         Ok(s) => return Ok(Json(s)),
         Err(_) => Err(StatusCode::NOT_FOUND),
@@ -111,6 +113,7 @@ pub async fn get_user_from_token(headers: HeaderMap) -> Result<User, StatusCode>
     };
 }
 
+#[debug_handler]
 pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>, StatusCode> {
     let token = match get_token(headers).await {
         Err(_e) => return Err(StatusCode::BAD_REQUEST),
@@ -131,7 +134,6 @@ pub async fn get_user_info(headers: axum::http::HeaderMap) -> Result<Json<User>,
 }
 
 async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
-    // return Ok(Uuid::parse_str(value.to_str().ok()))
     match headers.get(AUTHORIZATION) {
         Some(value) => match value.to_str() {
             Ok(o) => return Ok(o.to_string()),
@@ -141,6 +143,7 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
     };
 }
 
+// retrieve all files from user 
 #[debug_handler]
 pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<Uuid>>, StatusCode> {
     let token: String;

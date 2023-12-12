@@ -1,5 +1,5 @@
 use crate::database::models::{
-    InsertedFile, NewFile, NewSessionToken, NewUser, SessionToken, User,
+    InsertedFile, NewFile, NewSessionToken, NewUser, User,
 };
 
 use chrono::NaiveDateTime;
@@ -7,6 +7,7 @@ use diesel::prelude::*;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use dotenv::dotenv;
 use uuid::Uuid;
+use anyhow::{anyhow, Result};
 
 pub async fn establish_connection() -> AsyncPgConnection {
     dotenv().ok();
@@ -16,16 +17,17 @@ pub async fn establish_connection() -> AsyncPgConnection {
         .expect("Failed to connect to database!")
 }
 
-pub async fn create_user(new_user: NewUser) -> Result<Uuid, diesel::result::Error> {
+pub async fn create_user(new_user: NewUser) -> Result<Uuid, anyhow::Error> {
     let mut conn = establish_connection().await;
     diesel::insert_into(crate::schema::users::table)
         .values(&new_user)
         .execute(&mut conn)
-        .await?;
+        .await
+        .map_err(|err| anyhow::Error::from(err))?;
     Ok(new_user.id)
 }
 
-pub async fn upload_file(file: NewFile) -> Result<Uuid, Box<dyn std::error::Error>> {
+pub async fn upload_file(file: NewFile) -> Result<Uuid> {
     let mut conn = establish_connection().await;
 
     use crate::schema::files::dsl::*;
@@ -43,14 +45,14 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid, Box<dyn std::error::Erro
         }
         Err(err) => {
             error!("Error inserting file: {}", err);
-            Err(err.into())
+            Err(anyhow!(err))
         }
     }
 }
 
 pub async fn get_build_status(
     file_id: Uuid,
-) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
+) -> Result<crate::database::models::Buildstatus, anyhow::Error> {
     use crate::schema::files::dsl::*;
 
     let mut conn = establish_connection().await;
@@ -59,7 +61,8 @@ pub async fn get_build_status(
         .filter(id.eq(file_id))
         .select(build_status)
         .first(&mut conn)
-        .await;
+        .await
+        .map_err(|err| anyhow::Error::from(err));
 
     result
 }
@@ -67,7 +70,7 @@ pub async fn get_build_status(
 pub async fn update_build_status(
     file_id: Uuid,
     new_status: crate::database::models::Buildstatus,
-) -> Result<crate::database::models::Buildstatus, diesel::result::Error> {
+) -> Result<crate::database::models::Buildstatus, anyhow::Error> {
     use crate::schema::files::dsl::*;
 
     let mut conn = establish_connection().await;
@@ -75,39 +78,41 @@ pub async fn update_build_status(
     diesel::update(files.filter(id.eq(file_id)))
         .set(build_status.eq(new_status))
         .execute(&mut conn)
-        .await?;
+        .await
+        .map_err(|err| anyhow::Error::from(err))?;
 
-    let updated_status = files
+    return  files
         .filter(id.eq(file_id))
         .select(build_status)
         .first::<crate::database::models::Buildstatus>(&mut conn)
-        .await;
+        .await
+        .map_err(|err| anyhow::Error::from(err));
 
-    updated_status
+  
 }
 
-pub async fn username_exists(target_username: &str) -> Result<bool, diesel::result::Error> {
+pub async fn username_exists(target_username: &str) -> Result<bool, anyhow::Error> {
     use crate::schema::users::dsl::*;
     let mut conn = establish_connection().await;
-    let result = users
+    return users
         .filter(username.eq(target_username))
         .select(id)
         .first::<Uuid>(&mut conn)
-        .await;
-    match result {
-        Ok(_) => return Ok(true),
-        Err(_) => return Ok(false),
-    }
+        .await
+        .map(|_| true)
+        .map_err(|_| anyhow::anyhow!("Failed to check if username exists"));
+   
 }
 
-pub async fn get_user_from_username(_username: &str) -> Result<User, diesel::result::Error> {
+pub async fn get_user_from_username(_username: &str) -> Result<User, anyhow::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::users::dsl::*;
     let result = users
         .filter(username.eq(username))
         .first::<User>(&mut conn)
-        .await;
-    return result;
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to get user from username"));
+    result
 }
 
 pub struct UploadToken {
@@ -116,7 +121,7 @@ pub struct UploadToken {
     pub expiration_date: NaiveDateTime,
 }
 
-pub async fn upload_session_token(up_token: UploadToken) {
+pub async fn upload_session_token(up_token: UploadToken) -> Result<(), anyhow::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::session_tokens::dsl::*;
 
@@ -130,30 +135,32 @@ pub async fn upload_session_token(up_token: UploadToken) {
         .values(new_token)
         .execute(&mut conn)
         .await
-        .expect("Failed to insert session token");
+        .map_err(|err| anyhow::Error::from(err))?;
+
+    Ok(())
 }
 
-pub async fn get_user(user_id: Uuid) -> Result<User, diesel::result::Error> {
+pub async fn get_user(user_id: Uuid) -> Result<User, anyhow::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::users::dsl::*;
-    let result = users.filter(id.eq(user_id)).first::<User>(&mut conn).await;
-    return result;
+    let result = users.filter(id.eq(user_id)).first::<User>(&mut conn).await.map_err(|err| anyhow::Error::from(err));
+    result
 }
 
-pub async fn get_token_owner(token_str: &String) -> Result<User, diesel::result::Error> {
+pub async fn get_token_owner(token_str: &String) -> Result<User, anyhow::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::session_tokens::dsl::*;
     let result: Uuid = session_tokens
         .select(user_uuid)
         .filter(token.eq(token_str))
         .first(&mut conn)
-        .await?;
-    // Log the entire SessionToken for debugging
+        .await
+        .map_err(|err| anyhow::Error::from(err))?;
 
-    return get_user(result).await;
+    get_user(result).await
 }
 
-pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error> {
+pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>, anyhow::Error> {
     let mut conn = establish_connection().await;
     use crate::schema::files::dsl::*;
 
@@ -161,10 +168,8 @@ pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>, diesel::res
         .filter(owner_uuid.eq(user_id))
         .select(id)
         .load::<Uuid>(&mut conn)
-        .await;
+        .await
+        .map_err(|err| anyhow::Error::from(err));
 
-    match file_ids {
-        Ok(ids) => return Ok(ids),
-        Err(e) => return Err(e),
-    }
+    file_ids
 }

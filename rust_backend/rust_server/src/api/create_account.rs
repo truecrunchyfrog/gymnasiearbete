@@ -1,7 +1,6 @@
 use crate::database::NewUser;
 
-use axum::Form;
-use http::StatusCode;
+use axum::{Form, debug_handler, http::StatusCode};
 use regex::Regex;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -14,6 +13,7 @@ pub struct SignUp {
     password: String,
 }
 
+#[debug_handler]
 pub async fn register_account(
     Form(sign_up): Form<SignUp>,
 ) -> StatusCode {
@@ -76,7 +76,7 @@ fn verify_password(password: &str) -> bool {
 async fn upload_user(
     username: &str,
     hash_combo: HashSalt,
-) -> Result<Uuid, diesel::result::Error> {
+) -> Result<Uuid, anyhow::Error> {
     let new_user = NewUser {
         id: Uuid::new_v4(),
         username: username.to_string(),
