@@ -1,0 +1,18 @@
+version: '3'
+services:
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    cap_drop:
+      - all
+    volumes:
+      - ./files:/app/:ro
+    deploy:
+        resources:
+            limits:
+              cpus: '0.1'
+              memory: '128MB'
+            reservations:
+              cpus: '0.1'
+              memory: '128MB'
