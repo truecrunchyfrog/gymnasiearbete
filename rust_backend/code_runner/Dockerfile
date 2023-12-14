@@ -1,15 +1,6 @@
-# Use Debian as the base image
-FROM debian:bullseye-slim
+# Use alpine as the base image
+FROM alpine:latest
 
-ARG DEBIAN_FRONTEND=noninteractive
+RUN groupadd -r user && useradd -r -g group user
 
-# Update the package index and install required packages
-RUN apt-get update && \
-    apt-get install -y firejail
-
-# Create a directory for the exposed folder
-RUN mkdir /app
-
-# Specify the entry point with Firejail
-# ENTRYPOINT ["firejail", "--timeout=00:00:01", "--rlimit-cpu=1", "--rlimit-nofile=10", "--rlimit-fsize=0", "--rlimit-nproc=2", "--restrict-namespaces", "--private", "--read-only=/", "/app/program"]
-ENTRYPOINT [ "firejail", "sh" ]
+ENTRYPOINT [ "timeout", "30", "tail", "-f", "/dev/null", "&&", "/app/program" ]

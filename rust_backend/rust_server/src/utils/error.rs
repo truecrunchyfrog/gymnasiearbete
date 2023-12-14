@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 pub type Result<T> = core::result::Result<T, Error>;
 use anyhow::Error as AnyhowError;
+use hyper::Error as HyperError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -9,6 +10,7 @@ pub enum Error {
     TokenError,
     UserNotFound,
     InternalServerError,
+    DatabaseError,
 }
 
 impl IntoResponse for Error {
@@ -23,6 +25,14 @@ impl IntoResponse for Error {
 
 impl From<AnyhowError> for Error {
     fn from(err: AnyhowError) -> Error {
+        // Here you can convert the anyhow::Error into your custom Error type.
+        // This is just an example. You need to replace it with your actual conversion logic.
+        error!("Error: {}", err);
+        Error::InternalServerError
+    }
+}
+impl From<HyperError> for Error {
+    fn from(err: HyperError) -> Error {
         // Here you can convert the anyhow::Error into your custom Error type.
         // This is just an example. You need to replace it with your actual conversion logic.
         error!("Error: {}", err);

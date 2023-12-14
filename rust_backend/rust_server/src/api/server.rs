@@ -175,3 +175,19 @@ pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<U
     let json_str = Json(files);
     return Ok(json_str);
 }
+
+#[debug_handler]
+pub async fn get_server_status(headers: HeaderMap) -> Result<Json<crate::api::ServerStatus>, StatusCode> {
+    let token = match get_token(headers).await {
+        Err(_e) => return Err(StatusCode::UNAUTHORIZED),
+        Ok(t) => t,
+    };
+
+    match get_token_owner(&token).await {
+        Ok(_u) => return Ok(Json(crate::api::ServerStatus::new().await)),
+        Err(e) => {
+            error!("Failed to get owner of token: {}", e);
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    };
+}

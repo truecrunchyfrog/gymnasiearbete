@@ -1,7 +1,10 @@
 use super::establish_connection;
-use diesel::result::Error;
+use crate::utils::Error;
 
 pub async fn check_connection() -> Result<(), Error> {
-    let _conn = establish_connection().await;
-    return Ok(());
+    let conn = establish_connection().await;
+    match conn {
+        Ok(_) => Ok(()),
+        Err(e) => {error!("{}",e); Err(Error::DatabaseError)},
+    }
 }
