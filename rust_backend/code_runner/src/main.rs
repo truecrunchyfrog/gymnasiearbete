@@ -23,7 +23,8 @@ fn main() -> std::io::Result<()> {
 
 fn handle_connection(mut stream: UnixStream) -> std::io::Result<()> {
     let mut buffer = [0; 1024];
-    let temp_file_name = format!("temp_{}.c", Uuid::new());
+
+    let temp_file_name = format!("temp_{}.c", uuid::Uuid::new_v4());
 
     // Create or truncate the temporary file
     let mut file = fs::OpenOptions::new()

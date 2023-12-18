@@ -16,12 +16,12 @@ use axum::{
 use database::check_connection;
 use env_logger::Builder;
 use log::LevelFilter;
+use std::path::Path;
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex}, error::Error,
+    sync::{Arc, Mutex},
 };
 use tasks::TaskManager;
-use std::path::Path;
 #[derive(Clone)]
 pub struct AppState {
     tm: Arc<Mutex<TaskManager>>,
@@ -33,7 +33,7 @@ pub fn check_docker_socket() -> bool {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>>{
+async fn main() -> Result<(), utils::Error> {
     let mut builder = Builder::from_default_env();
     builder.filter_level(LevelFilter::Info);
     builder.init();
@@ -44,7 +44,6 @@ async fn main() -> Result<(), Box<dyn Error>>{
     {
         warn!("Warning! Running on Windows. Docker will be unavailable!");
     }
-    
 
     #[cfg(unix)]
     {
@@ -52,7 +51,6 @@ async fn main() -> Result<(), Box<dyn Error>>{
             warn!("Warning! Docker socket does not exist!");
         }
     }
-
 
     let connection_status = check_connection().await;
     match connection_status {
@@ -87,6 +85,8 @@ async fn main() -> Result<(), Box<dyn Error>>{
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await?;
-    Ok(())
+        .await
+        .expect("Failed to run server");
+
+    return Ok(());
 }

@@ -31,7 +31,8 @@ impl From<AnyhowError> for Error {
         Error::InternalServerError
     }
 }
-impl From<HyperError> for Error {
+
+impl From<hyper::Error> for Error {
     fn from(err: HyperError) -> Error {
         // Here you can convert the anyhow::Error into your custom Error type.
         // This is just an example. You need to replace it with your actual conversion logic.

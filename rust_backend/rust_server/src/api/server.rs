@@ -7,8 +7,8 @@ use crate::utils::{create_file, get_extension_from_filename};
 use crate::tasks::ExampleTask;
 use crate::AppState;
 use axum::extract::{Multipart, State};
-use axum::http::{HeaderMap, StatusCode};
 use axum::http::header::AUTHORIZATION;
+use axum::http::{HeaderMap, StatusCode};
 use axum::{debug_handler, Json};
 
 use std::fs;
@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::SystemTime;
 use uuid::Uuid;
 
-use crate::Error;
+use crate::utils::Error;
 
 #[debug_handler]
 pub async fn upload(
@@ -27,11 +27,10 @@ pub async fn upload(
     mut multipart: Multipart,
 ) -> Result<Json<Uuid>, StatusCode> {
     while let Ok(Some(field)) = multipart.next_field().await {
-        
         let name = field.file_name().map(|s| s.to_string());
         let data_result = field.bytes().await;
         let data;
-        
+
         match data_result {
             Ok(o) => data = o,
             Err(e) => {
@@ -42,7 +41,7 @@ pub async fn upload(
 
         let name = name.ok_or(StatusCode::BAD_REQUEST)?;
         let extension = get_extension_from_filename(&name).ok_or(StatusCode::BAD_REQUEST)?;
-        
+
         let current_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|d| d.as_secs().to_string())
@@ -143,7 +142,7 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
     };
 }
 
-// retrieve all files from user 
+// retrieve all files from user
 #[debug_handler]
 pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<Uuid>>, StatusCode> {
     let token: String;
@@ -177,7 +176,9 @@ pub async fn get_user_files(headers: axum::http::HeaderMap) -> Result<Json<Vec<U
 }
 
 #[debug_handler]
-pub async fn get_server_status(headers: HeaderMap) -> Result<Json<crate::api::ServerStatus>, StatusCode> {
+pub async fn get_server_status(
+    headers: HeaderMap,
+) -> Result<Json<crate::api::ServerStatus>, StatusCode> {
     let token = match get_token(headers).await {
         Err(_e) => return Err(StatusCode::UNAUTHORIZED),
         Ok(t) => t,
