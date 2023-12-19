@@ -11,6 +11,7 @@ pub enum Error {
     UserNotFound,
     InternalServerError,
     DatabaseError,
+    FileNotFound,
 }
 
 impl IntoResponse for Error {

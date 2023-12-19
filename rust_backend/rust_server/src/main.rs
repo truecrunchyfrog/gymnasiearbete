@@ -78,6 +78,7 @@ async fn main() -> Result<(), utils::Error> {
         .route("/profile", get(api::get_user_info))
         .route("/files", get(api::get_user_files))
         .route("/info", get(api::get_server_status))
+        .route("/run", post(api::run_user_code))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
