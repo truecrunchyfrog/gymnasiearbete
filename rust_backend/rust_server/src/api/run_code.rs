@@ -1,7 +1,10 @@
 use axum::http::StatusCode;
 use uuid::Uuid;
 
-use crate::{schema::session_tokens::user_uuid, utils::Error};
+use crate::{
+    docker::docker_api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
+    utils::Error,
+};
 
 use super::get_user_from_token;
 pub async fn run_user_code(headers: axum::http::HeaderMap) -> StatusCode {
@@ -27,6 +30,12 @@ pub async fn run_user_code(headers: axum::http::HeaderMap) -> StatusCode {
     };
     if !user_files.contains(&file_uuid) {
         return StatusCode::NOT_FOUND;
+    }
+
+    // run example
+    match configure_and_run_secure_container().await {
+        Ok(_) => {}
+        Err(_) => return StatusCode::EXPECTATION_FAILED,
     }
 
     StatusCode::OK
