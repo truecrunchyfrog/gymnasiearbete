@@ -17,10 +17,8 @@ use database::check_connection;
 use env_logger::Builder;
 use log::LevelFilter;
 use std::path::Path;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
+
 use tasks::TaskManager;
 #[derive(Clone)]
 pub struct AppState {
@@ -81,13 +79,9 @@ async fn main() -> Result<(), utils::Error> {
         .route("/run", post(api::run_user_code))
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    info!("Listening on {}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .expect("Failed to run server");
+    // run our app with hyper, listening globally on port 3000
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 
     return Ok(());
 }
