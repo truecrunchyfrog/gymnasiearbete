@@ -7,38 +7,49 @@ use crate::{
 };
 
 use super::get_user_from_token;
-pub async fn run_user_code(headers: axum::http::HeaderMap) -> StatusCode {
+
+async fn check_authentication(headers: axum::http::HeaderMap) -> bool {
     let user = match get_user_from_token(headers.clone()).await {
         Ok(u) => u,
-        Err(status) => return status,
+        Err(_) => return false,
     };
     let file_id = match get_file_from_header(headers).await {
         Ok(o) => o,
-        Err(_) => return StatusCode::NOT_FOUND,
+        Err(_) => return false,
     };
 
     let user_files = match crate::database::connection::get_files_from_user(user.id).await {
         Ok(o) => o,
-        Err(_) => return StatusCode::NOT_FOUND,
+        Err(_) => return false,
     };
 
     // check if file is owned by user
     let file_uuid = Uuid::parse_str(&file_id);
     let file_uuid = match file_uuid {
         Ok(o) => o,
-        Err(_) => return StatusCode::NOT_FOUND,
+        Err(_) => return false,
     };
     if !user_files.contains(&file_uuid) {
-        return StatusCode::NOT_FOUND;
+        return false;
     }
+    return true;
+}
 
+pub async fn run_user_code(headers: axum::http::HeaderMap) -> StatusCode {
+    // Change this to check if the user has access to the file
+    info!("Running user code");
+    if check_authentication(headers.clone()).await {
+        return StatusCode::UNAUTHORIZED;
+    }
+    info!("Authenticated Successfully");
     // run example
     match configure_and_run_secure_container().await {
-        Ok(_) => {}
-        Err(_) => return StatusCode::EXPECTATION_FAILED,
+        Ok(_) => return StatusCode::OK,
+        Err(e) => {
+            error!("Failed to run container: {:?}", e);
+            return StatusCode::EXPECTATION_FAILED;
+        }
     }
-
-    StatusCode::OK
 }
 
 async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String, Error> {

@@ -58,3 +58,7 @@
 - **Responses:**
   - `200 OK`: Successful response with an array of file UUIDs.
   - `500 Internal Server Error`: An error occurred while processing the request.
+
+
+  ## Testing
+  gcc program.c -o program.o && http POST http://127.0.0.1:3000/run
