@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     docker::docker_api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
-    utils::Error,
+    Error,
 };
 
 use super::get_user_from_token;

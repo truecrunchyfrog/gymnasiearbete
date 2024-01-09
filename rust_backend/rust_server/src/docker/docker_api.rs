@@ -1,6 +1,5 @@
-use std::io::Read;
-
 use bollard::exec::CreateExecOptions;
+use std::io::Read;
 use tokio::io::AsyncReadExt;
 
 use bollard::container::UploadToContainerOptions;
@@ -115,7 +114,7 @@ async fn copy_file_into_container(
         ..Default::default()
     });
 
-    let tmp_file = create_targz_archive(file_path).await?;
+    let tmp_file = create_targz_archive(file_path)?;
     let mut file = File::open(tmp_file.path()).await?;
 
     // let mut file = File::open("./rust_server/demo_code/program.tar.gz").await?;
@@ -212,7 +211,7 @@ pub async fn configure_and_run_secure_container() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyhow::Error> {
+fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyhow::Error> {
     let file = tempfile::NamedTempFile::new()?;
     let mut tar = tar::Builder::new(file);
 

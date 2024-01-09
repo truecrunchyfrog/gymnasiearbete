@@ -1,6 +1,6 @@
 use crate::database::NewUser;
-
-use axum::{Form, debug_handler, http::StatusCode};
+use crate::Result;
+use axum::{debug_handler, http::StatusCode, Form};
 use regex::Regex;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -14,9 +14,7 @@ pub struct SignUp {
 }
 
 #[debug_handler]
-pub async fn register_account(
-    Form(sign_up): Form<SignUp>,
-) -> StatusCode {
+pub async fn register_account(Form(sign_up): Form<SignUp>) -> StatusCode {
     // check username
     if !verify_username(&sign_up.username) {
         return StatusCode::NOT_ACCEPTABLE;
@@ -26,8 +24,7 @@ pub async fn register_account(
         return StatusCode::NOT_ACCEPTABLE;
     }
     // check if username exists
-    let username_exists =
-        crate::database::connection::username_exists(&sign_up.username).await;
+    let username_exists = crate::database::connection::username_exists(&sign_up.username).await;
     match username_exists {
         Ok(t) => match t {
             true => return StatusCode::NOT_ACCEPTABLE,
@@ -50,9 +47,9 @@ pub async fn register_account(
     match upload {
         Ok(_) => return StatusCode::ACCEPTED,
         Err(e) => {
-            error!("{}",e);
-            return StatusCode::INTERNAL_SERVER_ERROR
-        },
+            error!("{}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR;
+        }
     }
 }
 
@@ -71,12 +68,7 @@ fn verify_password(password: &str) -> bool {
     has_lowercase && has_uppercase && has_digit && has_special && is_length_valid
 }
 
-
-
-async fn upload_user(
-    username: &str,
-    hash_combo: HashSalt,
-) -> Result<Uuid, anyhow::Error> {
+async fn upload_user(username: &str, hash_combo: HashSalt) -> Result<Uuid> {
     let new_user = NewUser {
         id: Uuid::new_v4(),
         username: username.to_string(),
@@ -85,4 +77,3 @@ async fn upload_user(
     };
     crate::database::connection::create_user(new_user).await
 }
-

@@ -1,10 +1,13 @@
-use axum::{Form, debug_handler, http::StatusCode};
+use axum::{debug_handler, http::StatusCode, Form};
 use chrono::{DateTime, Duration, Utc};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
 use super::check_password;
-use crate::{database::connection::{get_user_from_username, upload_session_token, UploadToken}, utils::Error};
+use crate::{
+    database::connection::{get_user_from_username, upload_session_token, UploadToken},
+    Error,
+};
 
 #[derive(Deserialize)]
 pub struct LogInInfo {
@@ -15,10 +18,7 @@ pub struct LogInInfo {
 #[allow(non_snake_case)]
 #[debug_handler]
 pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Error> {
-
     let user = get_user_from_username(&LogInInfo.username).await?;
-    
-    
 
     let hash_salt = super::HashSalt {
         hash: user.password_hash,
@@ -26,7 +26,7 @@ pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Err
     };
 
     if !check_password(LogInInfo.password, hash_salt) {
-        return Err(Error::UserNotFound)
+        return Err(Error::UserNotFound);
     }
 
     let token = generate_session_token();

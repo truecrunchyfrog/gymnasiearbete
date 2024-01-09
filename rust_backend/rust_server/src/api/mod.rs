@@ -1,3 +1,4 @@
+pub mod authentication;
 mod create_account;
 mod hashing;
 mod log_in;

@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::SystemTime;
 use uuid::Uuid;
 
-use crate::utils::Error;
+use crate::Error;
 
 #[debug_handler]
 pub async fn upload(
@@ -136,7 +136,7 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String, Error> {
     match headers.get(AUTHORIZATION) {
         Some(value) => match value.to_str() {
             Ok(o) => return Ok(o.to_string()),
-            Err(_e) => return Err(Error::TokenError),
+            Err(_e) => return Err(Error::AuthFailTokenWrongFormat),
         },
         None => return Err(Error::LoginFail),
     };
