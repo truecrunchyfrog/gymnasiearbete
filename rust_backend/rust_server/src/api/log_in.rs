@@ -1,13 +1,18 @@
-use axum::{debug_handler, http::StatusCode, Form};
-use chrono::{DateTime, Duration, Utc};
-use rand::{distributions::Alphanumeric, Rng};
-use serde::Deserialize;
-
 use super::check_password;
+use crate::Json;
+use crate::Result;
 use crate::{
     database::connection::{get_user_from_username, upload_session_token, UploadToken},
     Error,
 };
+use argon2::password_hash::Salt;
+use argon2::PasswordHash;
+use axum::{debug_handler, http::StatusCode, Form};
+use chrono::{DateTime, Duration, Utc};
+use rand::{distributions::Alphanumeric, Rng};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tower_cookies::{Cookie, Cookies};
 
 #[derive(Deserialize)]
 pub struct LogInInfo {
@@ -17,16 +22,20 @@ pub struct LogInInfo {
 
 #[allow(non_snake_case)]
 #[debug_handler]
-pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Error> {
-    let user = get_user_from_username(&LogInInfo.username).await?;
+pub async fn log_in_user(cookies: Cookies, payload: Json<LoginPayload>) -> Result<Json<Value>> {
+    println!("->> {:<12} - api_login", "HANDLER");
 
-    let hash_salt = super::HashSalt {
-        hash: user.password_hash,
-        salt: user.salt,
-    };
+    let user = get_user_from_username(&payload.username).await?;
 
-    if !check_password(LogInInfo.password, hash_salt) {
-        return Err(Error::UserNotFound);
+    let user_hash = user.password_hash.clone();
+
+    if !check_password(&payload.pwd, &user_hash).expect("Failed to check password") {
+        let body = Json(json!({
+            "result": {
+                "success": false,
+                "reason": "Incorrect password"
+            }
+        }));
     }
 
     let token = generate_session_token();
@@ -36,9 +45,21 @@ pub async fn log_in_user(Form(LogInInfo): Form<LogInInfo>) -> Result<String, Err
         token: token.clone(),
         expiration_date: get_session_expiration().naive_utc(),
     };
-    upload_session_token(session_token).await;
+    upload_session_token(session_token.clone()).await;
 
-    return Ok(token);
+    let mut cookie = Cookie::new(crate::api::authentication::AUTH_TOKEN, session_token.token);
+    cookie.set_http_only(true);
+    cookie.set_path("/");
+    cookies.add(cookie);
+
+    // Create the success body.
+    let body = Json(json!({
+        "result": {
+            "success": true
+        }
+    }));
+
+    return Ok(body);
 }
 
 pub fn get_session_expiration() -> DateTime<Utc> {
@@ -55,4 +76,10 @@ pub fn generate_session_token() -> String {
         .take(30) // you can specify the length of the token here
         .collect();
     session_token
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginPayload {
+    username: String,
+    pwd: String,
 }

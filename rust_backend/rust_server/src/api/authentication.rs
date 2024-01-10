@@ -20,7 +20,7 @@ pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -
     Ok(next.run(req).await)
 }
 
-const AUTH_TOKEN: &str = "auth_token";
+pub const AUTH_TOKEN: &str = "auth_token";
 
 pub async fn mw_ctx_resolver(cookies: Cookies, req: Request<Body>, next: Next) -> Result<Response> {
     println!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");

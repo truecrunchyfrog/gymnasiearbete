@@ -76,39 +76,41 @@ pub async fn update_build_status(
         .set(build_status.eq(new_status))
         .execute(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail)?;
+        .map_err(|err| Error::DatabaseQueryFail)?;
 
     return files
         .filter(id.eq(file_id))
         .select(build_status)
         .first::<crate::database::models::Buildstatus>(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail);
+        .map_err(|err| Error::DatabaseQueryFail);
 }
 
 pub async fn username_exists(target_username: &str) -> Result<bool> {
     use crate::schema::users::dsl::*;
     let mut conn = establish_connection().await?;
-    return users
+    let result = users
         .filter(username.eq(target_username))
-        .select(id)
-        .first::<Uuid>(&mut conn)
+        .first::<User>(&mut conn)
         .await
-        .map(|_| true)
-        .map_err(|_| Error::DatabaseConnectionFail);
+        .map_err(|err| Error::DatabaseConnectionFail);
+    match result {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
 }
 
 pub async fn get_user_from_username(_username: &str) -> Result<User> {
     let mut conn = establish_connection().await?;
     use crate::schema::users::dsl::*;
     let result = users
-        .filter(username.eq(username))
+        .filter(username.eq(_username))
         .first::<User>(&mut conn)
         .await
         .map_err(|_| Error::DatabaseConnectionFail);
     result
 }
-
+#[derive(Clone)]
 pub struct UploadToken {
     pub user_uuid: Uuid,
     pub token: String,
@@ -129,7 +131,7 @@ pub async fn upload_session_token(up_token: UploadToken) -> Result<()> {
         .values(new_token)
         .execute(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail)?;
+        .map_err(|err| Error::DatabaseQueryFail)?;
 
     Ok(())
 }
@@ -141,7 +143,7 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
         .filter(id.eq(user_id))
         .first::<User>(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail);
+        .map_err(|err| Error::DatabaseQueryFail);
     result
 }
 
@@ -153,7 +155,7 @@ pub async fn get_token_owner(token_str: &String) -> Result<User> {
         .filter(token.eq(token_str))
         .first(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail)?;
+        .map_err(|err| Error::DatabaseQueryFail)?;
 
     get_user(result).await
 }
@@ -167,7 +169,7 @@ pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
         .select(id)
         .load::<Uuid>(&mut conn)
         .await
-        .map_err(|err| Error::DatabaseConnectionFail);
+        .map_err(|err| Error::DatabaseQueryFail);
 
     file_ids
 }
