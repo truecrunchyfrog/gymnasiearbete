@@ -1,0 +1,33 @@
+# Last Modified: Sun Dec 10 13:15:18 2017
+#include <tunables/global>
+
+/profile apparmor-profile flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <tunables/program>
+
+  /app/program {
+    # Allow read access to the program itself
+    /app/program r,
+
+    # Allow execution of the program
+    /app/program ix,
+
+    # Add additional read permissions for required libraries, if any
+    # /path/to/required/library.so r,
+
+    # Allow write access to specific directories if needed
+    # /path/to/writeable/directory/ rw,
+
+    # Exclude /run/firejail/dbus from mounts
+    deny /run/firejail/dbus/**,
+
+    # Deny access to all other files and directories
+    deny /** rw,
+
+
+    # Deny fork and execve system calls
+    deny /app/program fork,
+    deny /app/program exec,
+
+  }
+}
