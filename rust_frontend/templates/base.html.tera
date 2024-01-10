@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/semantic-ui@2.5.0/dist/semantic.min.css" />
+    <title>{% block title %}{% endblock title %} : Gymnasiearbete</title>
+    {% endblock head %}
+</head>
+<body>
+    <div class="ui text menu">
+        <div class="ui right dropdown item">
+          More
+          <i class="dropdown icon"></i>
+          <div class="menu">
+            <div class="item">Applications</div>
+            <div class="item">International Students</div>
+            <div class="item">Scholarships</div>
+          </div>
+        </div>
+    </div>
+
+    <div>{% block content %}{% endblock content %}</div>
+    <script src="https://unpkg.com/semantic-ui@2.5.0/dist/semantic.min.js"></script>
+</body>
+</html>

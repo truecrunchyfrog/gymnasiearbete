@@ -14,14 +14,21 @@ struct UploadForm<'a> {
     file: TempFile<'a>,
 }
 
+#[get("/")]
+fn index() -> Template {
+    Template::render("index.html", context! {
+
+    })
+}
+
 #[post("/upload-file", data = "<form>")]
-fn index(form: Form<UploadForm>) -> &'static str {
+fn upload(form: Form<UploadForm>) -> &'static str {
     "Hallå"
 }
 
 #[launch]
 fn rocket() -> _ {
     rocket::build()
-        .mount("/", routes![index])
+        .mount("/", routes![index, upload])
         .attach(Template::fairing())
 }

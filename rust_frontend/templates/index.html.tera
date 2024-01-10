@@ -1,0 +1,6 @@
+{% extends "base" %}
+
+{% block content %}
+<h1>Like strategic games, but automated.</h1>
+
+{% endblock %}
