@@ -47,7 +47,10 @@ pub async fn log_in_user(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
     };
     upload_session_token(session_token.clone()).await;
 
-    let mut cookie = Cookie::new(crate::api::authentication::AUTH_TOKEN, session_token.token);
+    let mut cookie = Cookie::new(
+        crate::api::authentication::AUTH_TOKEN,
+        create_cookie(session_token),
+    );
     cookie.set_http_only(true);
     cookie.set_path("/");
     cookies.add(cookie);
@@ -76,6 +79,17 @@ pub fn generate_session_token() -> String {
         .take(30) // you can specify the length of the token here
         .collect();
     session_token
+}
+
+// Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
+fn create_cookie(token: UploadToken) -> String {
+    let expiration_date = token.expiration_date;
+    let session_token = token.token;
+    let cookie = format!(
+        "sessionToken={}; Expires={}; HttpOnly; Path=/",
+        session_token, expiration_date
+    );
+    cookie
 }
 
 #[derive(Debug, Deserialize)]

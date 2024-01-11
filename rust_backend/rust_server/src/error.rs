@@ -16,11 +16,13 @@ pub enum Error {
     DatabaseConnectionFail,
     DatabaseQueryFail,
     DatabaseFailedToFindUser,
+    AuthFailTokenNotFound,
 
     // -- Auth errors.
     AuthFailNoAuthTokenCookie,
     AuthFailTokenWrongFormat,
     AuthFailCtxNotInRequestExt,
+    AuthFailInvalidToken,
 
     InternalServerError,
 

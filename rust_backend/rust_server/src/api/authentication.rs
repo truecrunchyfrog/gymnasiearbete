@@ -1,4 +1,8 @@
-use crate::{ctx::Ctx, Error, Result};
+use crate::{
+    ctx::Ctx,
+    database::{self, SessionToken},
+    Error, Result,
+};
 use async_trait::async_trait;
 use axum::{
     body::Body,
@@ -8,9 +12,14 @@ use axum::{
     routing::get,
     Router,
 };
+use chrono::NaiveDateTime;
+use diesel::query_dsl::methods::FilterDsl;
 use http::request::Parts;
+use hyper::server::conn;
 use lazy_regex::regex_captures;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+
+use super::session;
 
 pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -> Result<Response> {
     println!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
@@ -32,9 +41,14 @@ pub async fn mw_ctx_resolver(cookies: Cookies, req: Request<Body>, next: Next) -
         .ok_or(Error::AuthFailNoAuthTokenCookie)
         .and_then(parse_token)
     {
-        Ok((user_id, _exp, _sign)) => {
+        Ok((session_token, _exp)) => {
             // TODO: Token components validations.
-            Ok(Ctx::new(user_id))
+            let user = crate::database::connection::get_token_owner(&session_token).await?;
+            if user.is_some() {
+                Ok(Ctx::new(user.unwrap().id))
+            } else {
+                return Err(Error::AuthFailTokenNotFound);
+            }
         }
         Err(e) => Err(e),
     };
@@ -61,16 +75,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
     }
 }
 
-fn parse_token(token: String) -> Result<(u64, String, String)> {
-    let (_whole, user_id, exp, sign) = regex_captures!(
-        r#"^user-(\d+)\.(.+)\.(.+)"#, // a literal regex
-        &token
-    )
-    .ok_or(Error::AuthFailTokenWrongFormat)?;
-
-    let user_id: u64 = user_id
-        .parse()
-        .map_err(|_| Error::AuthFailTokenWrongFormat)?;
-
-    Ok((user_id, exp.to_string(), sign.to_string()))
+// Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
+fn parse_token(token: String) -> Result<(String, NaiveDateTime)> {
+    todo!();
 }

@@ -147,7 +147,8 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
     result
 }
 
-pub async fn get_token_owner(token_str: &String) -> Result<User> {
+// Get the user from the token, return a Result containing a Some(User) if the token is valid, None otherwise.
+pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
     let mut conn = establish_connection().await?;
     use crate::schema::session_tokens::dsl::*;
     let result: Uuid = session_tokens
@@ -157,7 +158,12 @@ pub async fn get_token_owner(token_str: &String) -> Result<User> {
         .await
         .map_err(|err| Error::DatabaseQueryFail)?;
 
-    get_user(result).await
+    let user = get_user(result).await?;
+    if user.id == Uuid::nil() {
+        return Ok(None);
+    } else {
+        return Ok(Some(user));
+    }
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
