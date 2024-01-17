@@ -17,7 +17,9 @@ use diesel::query_dsl::methods::FilterDsl;
 use http::request::Parts;
 use hyper::server::conn;
 use lazy_regex::regex_captures;
+use tokio::sync::oneshot::error;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use uuid::Uuid;
 
 use super::session;
 
@@ -31,7 +33,11 @@ pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -
 
 pub const AUTH_TOKEN: &str = "auth_token";
 
-pub async fn mw_ctx_resolver(cookies: Cookies, req: Request<Body>, next: Next) -> Result<Response> {
+pub async fn mw_ctx_resolver(
+    cookies: Cookies,
+    mut req: Request<Body>,
+    next: Next,
+) -> Result<Response> {
     println!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
 
     let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
@@ -41,14 +47,15 @@ pub async fn mw_ctx_resolver(cookies: Cookies, req: Request<Body>, next: Next) -
         .ok_or(Error::AuthFailNoAuthTokenCookie)
         .and_then(parse_token)
     {
-        Ok((session_token, _exp)) => {
+        Ok((token, _exp, _sign)) => {
             // TODO: Token components validations.
-            let user = crate::database::connection::get_token_owner(&session_token).await?;
-            if user.is_some() {
-                Ok(Ctx::new(user.unwrap().id))
-            } else {
-                return Err(Error::AuthFailTokenNotFound);
-            }
+            let user = database::connection::get_token_owner(&token)
+                .await?
+                .ok_or(Error::AuthFailTokenWrongFormat)?;
+            let user_id = &user.id.to_string();
+            Ok(Ctx::new(
+                Uuid::parse_str(&user_id).map_err(|_| Error::AuthFailTokenWrongFormat)?,
+            ))
         }
         Err(e) => Err(e),
     };
@@ -57,6 +64,10 @@ pub async fn mw_ctx_resolver(cookies: Cookies, req: Request<Body>, next: Next) -
     if result_ctx.is_err() && !matches!(result_ctx, Err(Error::AuthFailNoAuthTokenCookie)) {
         cookies.remove(Cookie::from(AUTH_TOKEN))
     }
+
+    // Store the ctx_result in the request extension.
+    req.extensions_mut().insert(result_ctx);
+
     Ok(next.run(req).await)
 }
 
@@ -76,6 +87,18 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
 }
 
 // Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
-fn parse_token(token: String) -> Result<(String, NaiveDateTime)> {
-    todo!();
+fn parse_token(token: String) -> Result<(String, NaiveDateTime, String)> {
+    // Example token: sessionToken=y7Vj6bYvjqGHO3NXrC0sEW83fS8Wb8
+
+    // Get everything after the '='
+    let session_token = token
+        .split('=')
+        .nth(1)
+        .ok_or(Error::AuthFailTokenWrongFormat)?
+        .to_string();
+
+    // Return the token and the expiration date. currently hardcoded to 1 hour from now
+    let exp: NaiveDateTime =
+        NaiveDateTime::from_timestamp_opt(chrono::Utc::now().timestamp() + 60 * 60, 0).unwrap();
+    Ok((session_token, exp, "sign".to_string()))
 }

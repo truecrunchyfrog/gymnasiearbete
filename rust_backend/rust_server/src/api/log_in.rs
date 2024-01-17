@@ -51,6 +51,9 @@ pub async fn log_in_user(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
         crate::api::authentication::AUTH_TOKEN,
         create_cookie(session_token),
     );
+
+    info!("Created cookie: {}", &cookie);
+
     cookie.set_http_only(true);
     cookie.set_path("/");
     cookies.add(cookie);

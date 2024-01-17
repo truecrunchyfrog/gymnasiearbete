@@ -152,8 +152,8 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
     let mut conn = establish_connection().await?;
     use crate::schema::session_tokens::dsl::*;
     let result: Uuid = session_tokens
-        .select(user_uuid)
         .filter(token.eq(token_str))
+        .select(user_uuid)
         .first(&mut conn)
         .await
         .map_err(|err| Error::DatabaseQueryFail)?;

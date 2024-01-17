@@ -2,6 +2,7 @@
 extern crate log;
 
 pub use self::error::{Error, Result};
+use tokio::time::Duration;
 
 use crate::tasks::start_task_thread;
 
@@ -19,7 +20,10 @@ use serde_json::json;
 use std::sync::{Arc, Mutex};
 use tasks::TaskManager;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 mod api;
@@ -72,6 +76,7 @@ async fn startup_checks() -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut builder = Builder::from_default_env();
+
     builder.filter_level(LevelFilter::Info);
     builder.init();
 
@@ -81,13 +86,16 @@ async fn main() -> Result<()> {
     start_task_thread(task_manager.clone());
     let state = AppState { tm: task_manager };
 
+    // tracing_subscriber::fmt::init();
+
     info!("Starting axum router");
+
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(api::root))
         .route("/upload", post(api::upload))
-        .route("/status/:fileid", get(api::return_build_status))
+        .route("/status/:file_id", get(api::return_build_status))
         .route("/register", post(api::register_account))
         .route("/login", post(api::log_in_user))
         .route("/profile", get(api::get_user_info))
@@ -101,7 +109,9 @@ async fn main() -> Result<()> {
 
     // run our app with hyper, listening globally on port 3000
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+
     println!("->> LISTENING on {:?}\n", listener.local_addr());
+
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();

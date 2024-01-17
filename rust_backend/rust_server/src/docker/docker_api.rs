@@ -6,7 +6,7 @@ use bollard::container::UploadToContainerOptions;
 use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
 use bollard::Docker;
 use futures::{StreamExt, TryStreamExt};
-use tempfile::tempfile;
+use tempfile::{tempfile, NamedTempFile};
 use tokio::fs::File;
 
 struct ContainerPreset {
@@ -178,6 +178,32 @@ async fn run_command_in_container(
         ..Default::default()
     };
     docker.create_exec(container_id, config).await?;
+
+    Ok(())
+}
+
+pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
+    todo!();
+    let test_file_path = "./rust_server/demo_code/program.c";
+    let docker = Docker::connect_with_local_defaults()?;
+    let preset = ContainerPreset {
+        name: "gcc".to_string(),
+        image: "_/gcc".to_string(),
+        cmd: vec![
+            "gcc".to_string(),
+            "-o".to_string(),
+            "/app/program.o".to_string(),
+            "/app/program.c".to_string(),
+        ],
+    };
+    remove_old_container(&docker, &preset.name).await?;
+    let container_id = create_container(&docker, &preset).await?;
+    copy_file_into_container(&docker, &container_id, test_file_path, "/app").await?;
+    start_container(&docker, &container_id).await?;
+    pull_logs(&docker, &container_id).await?;
+
+    stop_container(&docker, &container_id).await?;
+    //remove_container(&docker, &container_id).await?;
 
     Ok(())
 }

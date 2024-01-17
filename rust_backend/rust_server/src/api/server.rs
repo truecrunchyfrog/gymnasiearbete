@@ -83,9 +83,8 @@ pub async fn upload(
 
 // basic handler that responds with a static string
 #[debug_handler]
-pub async fn root(State(state): State<AppState>) -> &'static str {
-    let _task = ExampleTask::new(&state.tm);
-    "Hello, World!"
+pub async fn root(ctx: Ctx) -> Result<Json<String>> {
+    Ok(Json(format!("Hello, {}!", ctx.user_id())))
 }
 
 #[debug_handler]
@@ -134,7 +133,6 @@ async fn get_token(headers: axum::http::HeaderMap) -> Result<String> {
 }
 
 // retrieve all files from user
-#[debug_handler]
 pub async fn get_user_files(ctx: Ctx) -> Result<Json<Vec<Value>>> {
     let user_id = ctx.user_id();
     let user = get_user(user_id).await?;
