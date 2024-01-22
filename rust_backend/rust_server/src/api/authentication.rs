@@ -101,5 +101,5 @@ fn parse_token(token: String) -> Result<(String)> {
         .ok_or(Error::AuthFailTokenWrongFormat)?;
     let fount_token = re.1.to_string();
 
-    Ok((fount_token))
+    Ok(fount_token)
 }

@@ -50,7 +50,7 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid> {
 }
 
 pub async fn get_build_status(file_id: Uuid) -> Result<crate::database::models::Buildstatus> {
-    use crate::schema::files::dsl::*;
+    use crate::schema::files::dsl::{build_status, files, id};
 
     let mut conn = establish_connection().await?;
 
@@ -68,7 +68,7 @@ pub async fn update_build_status(
     file_id: Uuid,
     new_status: crate::database::models::Buildstatus,
 ) -> Result<crate::database::models::Buildstatus> {
-    use crate::schema::files::dsl::*;
+    use crate::schema::files::dsl::{build_status, files, id};
 
     let mut conn = establish_connection().await?;
 
@@ -87,7 +87,7 @@ pub async fn update_build_status(
 }
 
 pub async fn username_exists(target_username: &str) -> Result<bool> {
-    use crate::schema::users::dsl::*;
+    use crate::schema::users::dsl::{username, users};
     let mut conn = establish_connection().await?;
     let result = users
         .filter(username.eq(target_username))
@@ -100,11 +100,12 @@ pub async fn username_exists(target_username: &str) -> Result<bool> {
     }
 }
 
-pub async fn get_user_from_username(_username: &str) -> Result<User> {
+pub async fn get_user_from_username(username_query: &str) -> Result<User> {
+    use crate::schema::users::dsl::{username, users};
     let mut conn = establish_connection().await?;
-    use crate::schema::users::dsl::*;
+
     let result = users
-        .filter(username.eq(_username))
+        .filter(username.eq(username_query))
         .first::<User>(&mut conn)
         .await
         .map_err(|_| Error::DatabaseConnectionFail);
@@ -118,8 +119,8 @@ pub struct UploadToken {
 }
 
 pub async fn upload_session_token(up_token: UploadToken) -> Result<()> {
+    use crate::schema::session_tokens::dsl::session_tokens;
     let mut conn = establish_connection().await?;
-    use crate::schema::session_tokens::dsl::*;
 
     let new_token = NewSessionToken {
         token: &up_token.token,
@@ -137,8 +138,9 @@ pub async fn upload_session_token(up_token: UploadToken) -> Result<()> {
 }
 
 pub async fn get_user(user_id: Uuid) -> Result<User> {
+    use crate::schema::users::dsl::{id, users};
     let mut conn = establish_connection().await?;
-    use crate::schema::users::dsl::*;
+
     let result = users
         .filter(id.eq(user_id))
         .first::<User>(&mut conn)
@@ -149,8 +151,9 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
 
 // Get the user from the token, return a Result containing a Some(User) if the token is valid, None otherwise.
 pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
+    use crate::schema::session_tokens::dsl::{session_tokens, token, user_uuid};
     let mut conn = establish_connection().await?;
-    use crate::schema::session_tokens::dsl::*;
+
     let result: Uuid = session_tokens
         .filter(token.eq(token_str))
         .select(user_uuid)
@@ -166,8 +169,8 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
+    use crate::schema::files::dsl::{files, id, owner_uuid};
     let mut conn = establish_connection().await?;
-    use crate::schema::files::dsl::*;
 
     let file_ids = files
         .filter(owner_uuid.eq(user_id))

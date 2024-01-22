@@ -6,7 +6,9 @@ pub mod sql_types {
     pub struct Buildstatus;
 }
 
+#[allow(clippy::wildcard_imports)]
 diesel::table! {
+    #[allow(clippy::wildcard_imports)]
     use diesel::sql_types::*;
     use super::sql_types::Buildstatus;
 
@@ -50,8 +52,4 @@ diesel::table! {
 diesel::joinable!(files -> users (owner_uuid));
 diesel::joinable!(session_tokens -> users (user_uuid));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    files,
-    session_tokens,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(files, session_tokens, users,);

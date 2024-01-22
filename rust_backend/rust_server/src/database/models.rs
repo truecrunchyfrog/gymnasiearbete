@@ -1,4 +1,4 @@
-use crate::schema::*;
+use crate::schema::{files, session_tokens, users};
 use chrono::NaiveDateTime;
 
 use diesel::Insertable;
@@ -61,6 +61,7 @@ pub struct InsertedFile {
 #[derive(Queryable, Selectable, Insertable, Debug)]
 #[diesel(table_name = files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
+#[allow(clippy::struct_field_names)]
 pub struct File {
     pub id: Uuid,
     pub filename: String,

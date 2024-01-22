@@ -6,10 +6,12 @@ use tokio::time::sleep;
 use tokio::time::Duration;
 use uuid::Uuid;
 
+#[allow(clippy::module_name_repetitions)]
 pub struct TaskManager {
     pub tasks: Vec<Box<dyn Task + Send>>,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub enum TaskResult {
     Completed,
     InvalidArguments(String),
@@ -63,8 +65,14 @@ impl Task for ExampleTask {
 
 impl ExampleTask {
     pub fn new(tm: &Arc<Mutex<TaskManager>>) {
-        let t = Box::new(ExampleTask {});
-        let mut tm = tm.lock().unwrap();
+        let t = Box::new(Self {});
+        let mut tm = match tm.lock() {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Failed to lock task manager: {}", e);
+                return;
+            }
+        };
         tm.add_task(t);
     }
 }
@@ -84,31 +92,41 @@ impl Task for BuildImageTask {
 
 impl BuildImageTask {
     pub fn new(tm: &Arc<Mutex<TaskManager>>, file_id: Uuid) {
-        let t = Box::new(BuildImageTask { file_id });
-        let mut tm = tm.lock().unwrap();
+        let t = Box::new(Self { file_id });
+        let mut tm = match tm.lock() {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Failed to lock task manager: {}", e);
+                return;
+            }
+        };
         tm.add_task(t);
     }
 }
 
 pub fn start_task_thread(tm: Arc<Mutex<TaskManager>>) {
     std::thread::spawn(move || {
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            loop {
-                sleep(Duration::from_secs(1)).await;
-                {
-                    let tm = Arc::clone(&tm);
-                    let tm_guard = tm.lock().unwrap();
-                    if !tm_guard.tasks.is_empty() {
-                        let tm_ref = Arc::clone(&tm);
-                        tokio::task::spawn_blocking(move || {
-                            let mut tm = tm_ref.lock().unwrap();
-                            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                                tm.run_next().await;
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime")
+            .block_on(async {
+                loop {
+                    sleep(Duration::from_secs(1)).await;
+                    {
+                        let tm = Arc::clone(&tm);
+                        let tm_guard = tm.lock().expect("Failed to acquire lock");
+                        if !tm_guard.tasks.is_empty() {
+                            let tm_ref = Arc::clone(&tm);
+                            tokio::task::spawn_blocking(move || {
+                                let mut tm = tm_ref.lock().expect("Failed to acquire lock");
+                                tokio::runtime::Runtime::new()
+                                    .expect("Failed to create Tokio runtime")
+                                    .block_on(async {
+                                        tm.run_next().await;
+                                    });
                             });
-                        });
+                        }
                     }
                 }
-            }
-        });
+            });
     });
 }

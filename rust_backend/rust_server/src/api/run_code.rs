@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::{docker::docker_api::gcc_container, Result};
+use crate::{docker::api::gcc_container, Result};
 use axum::{extract::Multipart, http::StatusCode, Json};
 use serde_json::{json, Value};
 use tempfile::tempfile;
@@ -8,7 +8,7 @@ use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    ctx::Ctx, docker::docker_api::configure_and_run_secure_container,
+    ctx::Ctx, docker::api::configure_and_run_secure_container,
     schema::session_tokens::user_uuid, Error,
 };
 

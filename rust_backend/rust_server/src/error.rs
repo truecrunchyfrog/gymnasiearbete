@@ -54,7 +54,8 @@ impl IntoResponse for Error {
 }
 
 impl Error {
-    pub fn client_status_and_error(&self) -> (StatusCode, ClientError) {
+    #[must_use]
+    pub const fn client_status_and_error(&self) -> (StatusCode, ClientError) {
         #[allow(unreachable_patterns)]
         match self {
             Self::LoginFail => (StatusCode::FORBIDDEN, ClientError::LOGIN_FAIL),
@@ -80,6 +81,7 @@ impl Error {
 
 #[derive(Debug, strum_macros::AsRefStr)]
 #[allow(non_camel_case_types)]
+#[allow(clippy::module_name_repetitions)]
 pub enum ClientError {
     LOGIN_FAIL,
     NO_AUTH,

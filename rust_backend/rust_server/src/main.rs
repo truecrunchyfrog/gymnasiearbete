@@ -108,13 +108,15 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:3000")
+        .await
+        .expect("Failed to bind port");
 
     println!("->> LISTENING on {:?}\n", listener.local_addr());
 
     axum::serve(listener, app.into_make_service())
         .await
-        .unwrap();
+        .expect("Failed to run server");
 
     Ok(())
 }
