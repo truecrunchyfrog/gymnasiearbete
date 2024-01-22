@@ -5,12 +5,23 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace.lints.rust]
+[lints.rust]
 unsafe_code = "forbid"
-unused = "allow"       # For experimental code
+unused = "allow"
 
-[lints]
-workspace = true
+[lints.clippy]
+enum_glob_use = "deny"
+pedantic = "deny"
+nursery = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
 
 [dependencies]
 argon2 = "0.5.2"
@@ -57,6 +68,7 @@ ubyte = "0.10.4"
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 anyhow = "1.0.75"
 tower-http = { version = "0.5.1", features = ["timeout", "trace"] }
+color-eyre = "0.6.2"
 
 [dev-dependencies]
 httpc-test = "0.1.8"

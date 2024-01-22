@@ -15,27 +15,26 @@ use serde_json::{json, Value};
 use tower_cookies::{Cookie, Cookies};
 
 #[derive(Deserialize)]
-pub struct LogInInfo {
+pub struct UserLogin {
     username: String,
     password: String,
 }
 
-#[allow(non_snake_case)]
-#[debug_handler]
-pub async fn log_in_user(cookies: Cookies, payload: Json<LoginPayload>) -> Result<Json<Value>> {
+pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Result<Json<Value>> {
     println!("->> {:<12} - api_login", "HANDLER");
 
     let user = get_user_from_username(&payload.username).await?;
 
     let user_hash = user.password_hash.clone();
 
-    if !check_password(&payload.pwd, &user_hash).expect("Failed to check password") {
+    if !check_password(&payload.pwd, &user_hash) {
         let body = Json(json!({
             "result": {
                 "success": false,
                 "reason": "Incorrect password"
             }
         }));
+        return Ok(body);
     }
 
     let token = generate_session_token();
@@ -70,8 +69,8 @@ pub async fn log_in_user(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
 
 pub fn get_session_expiration() -> DateTime<Utc> {
     let now = Utc::now();
-    let one_hour_later = now + Duration::hours(1);
-    return one_hour_later;
+    let in_one_week = now + Duration::days(7);
+    return in_one_week;
 }
 
 pub fn generate_session_token() -> String {
@@ -88,10 +87,8 @@ pub fn generate_session_token() -> String {
 fn create_cookie(token: UploadToken) -> String {
     let expiration_date = token.expiration_date;
     let session_token = token.token;
-    let cookie = format!(
-        "sessionToken={}; Expires={}; HttpOnly; Path=/",
-        session_token, expiration_date
-    );
+    let cookie =
+        format!("sessionToken={session_token}; Expires={expiration_date}; HttpOnly; Path=/");
     cookie
 }
 

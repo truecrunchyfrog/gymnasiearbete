@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
         .route("/upload", post(api::upload))
         .route("/status/:file_id", get(api::return_build_status))
         .route("/register", post(api::register_account))
-        .route("/login", post(api::log_in_user))
+        .route("/login", post(api::login_route))
         .route("/profile", get(api::get_user_info))
         .route("/files", get(api::get_user_files))
         .route("/info", get(api::get_server_status))

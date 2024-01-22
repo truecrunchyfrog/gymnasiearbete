@@ -20,6 +20,7 @@ pub enum Error {
 
     // -- Auth errors.
     AuthFailNoAuthTokenCookie,
+    AuthFailTokenExpired,
     AuthFailTokenWrongFormat,
     AuthFailCtxNotInRequestExt,
     AuthFailInvalidToken,

@@ -40,7 +40,7 @@ async fn create_container(
 
     let host_config = bollard::service::HostConfig {
         auto_remove: Some(true),
-        memory: Some(8000000), // 8MB
+        memory: Some(8_000_000), // 8MB
         pids_limit: Some(1),
         network_mode: Some("none".to_string()),
         restart_policy: Some(bollard::service::RestartPolicy {

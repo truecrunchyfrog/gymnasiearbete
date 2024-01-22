@@ -16,7 +16,7 @@ pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
     info!("Authenticated Successfully");
     // run demo code
     match configure_and_run_secure_container().await {
-        Ok(_) => {
+        Ok(()) => {
             info!("Successfully ran container");
             Ok(Json(json!({
                 "message": "Successfully ran container"

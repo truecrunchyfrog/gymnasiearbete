@@ -19,7 +19,6 @@ pub struct SignUp {
     password: String,
 }
 
-#[debug_handler]
 pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json<Value>> {
     // check username
     if !verify_username(&payload.username) {
@@ -56,10 +55,19 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
 
     let password_salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    let password_hash = argon2
-        .hash_password(payload.pwd.as_bytes(), &password_salt)
-        .unwrap()
-        .to_string();
+
+    let mut password_hash = String::default();
+    if let Ok(ref p_hash) = argon2.hash_password(payload.pwd.as_bytes(), &password_salt) {
+        password_hash = p_hash.to_string();
+    } else {
+        let body = Json(json!({
+            "result": {
+                "success": false,
+                "reason": "Failed to hash password"
+            }
+        }));
+        return Ok(body);
+    }
 
     let upload = upload_user(&payload.username, password_hash, password_salt.to_string()).await?;
     let body = Json(json!({
@@ -72,8 +80,9 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
 }
 
 fn verify_username(other_username: &str) -> bool {
-    let re = Regex::new(r"^[a-zA-Z0-9]{6,16}$").unwrap();
-    return re.is_match(other_username);
+    let re = Regex::new(r"^[a-zA-Z0-9]{6,16}$");
+    let is_allowed = re.map_or(false, |r| r.is_match(other_username));
+    is_allowed
 }
 
 fn verify_password(password: &str) -> bool {
@@ -90,8 +99,8 @@ async fn upload_user(other_username: &str, hash: String, salt: String) -> Result
     let new_user = NewUser {
         id: Uuid::new_v4(),
         username: other_username.to_string(),
-        password_hash: hash.to_owned(),
-        salt: salt.to_owned(),
+        password_hash: hash,
+        salt,
     };
     crate::database::connection::create_user(new_user).await
 }

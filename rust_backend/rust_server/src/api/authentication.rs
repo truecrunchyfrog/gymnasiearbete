@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use crate::{
     ctx::Ctx,
-    database::{self, SessionToken},
+    database::{self, connection, SessionToken},
     Error, Result,
 };
 use async_trait::async_trait;
@@ -12,7 +14,7 @@ use axum::{
     routing::get,
     Router,
 };
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::query_dsl::methods::FilterDsl;
 use http::request::Parts;
 use hyper::server::conn;
@@ -44,25 +46,30 @@ pub async fn mw_ctx_resolver(
 
     // Compute Result<Ctx>.
     let result_ctx = match auth_token
+        .clone()
         .ok_or(Error::AuthFailNoAuthTokenCookie)
         .and_then(parse_token)
     {
-        Ok((token, _exp, _sign)) => {
-            // TODO: Token components validations.
-            let user = database::connection::get_token_owner(&token)
+        Ok((token_id)) => {
+            let user = connection::get_token_owner(&token_id)
                 .await?
                 .ok_or(Error::AuthFailTokenWrongFormat)?;
-            let user_id = &user.id.to_string();
-            Ok(Ctx::new(
-                Uuid::parse_str(&user_id).map_err(|_| Error::AuthFailTokenWrongFormat)?,
-            ))
+
+            let user_id = user.id.to_string();
+
+            Ok(Ctx::new(Uuid::from_str(user_id.as_str()).map_err(
+                |_| {
+                    error!("Failed to parse user_id from token");
+                    Error::AuthFailTokenWrongFormat
+                },
+            )?))
         }
         Err(e) => Err(e),
     };
 
     // Remove the cookie if something went wrong other than NoAuthTokenCookie.
     if result_ctx.is_err() && !matches!(result_ctx, Err(Error::AuthFailNoAuthTokenCookie)) {
-        cookies.remove(Cookie::from(AUTH_TOKEN))
+        cookies.remove(Cookie::from(AUTH_TOKEN));
     }
 
     // Store the ctx_result in the request extension.
@@ -80,25 +87,19 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
 
         parts
             .extensions
-            .get::<Result<Ctx>>()
+            .get::<Result<Self>>()
             .ok_or(Error::AuthFailCtxNotInRequestExt)?
             .clone()
     }
 }
 
 // Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
-fn parse_token(token: String) -> Result<(String, NaiveDateTime, String)> {
-    // Example token: sessionToken=y7Vj6bYvjqGHO3NXrC0sEW83fS8Wb8
+#[allow(clippy::needless_pass_by_value)]
+fn parse_token(token: String) -> Result<(String)> {
+    info!("Parsing token: {}", token);
+    let re = regex_captures!(r"sessionToken=(?P<token>.+)", &token)
+        .ok_or(Error::AuthFailTokenWrongFormat)?;
+    let fount_token = re.1.to_string();
 
-    // Get everything after the '='
-    let session_token = token
-        .split('=')
-        .nth(1)
-        .ok_or(Error::AuthFailTokenWrongFormat)?
-        .to_string();
-
-    // Return the token and the expiration date. currently hardcoded to 1 hour from now
-    let exp: NaiveDateTime =
-        NaiveDateTime::from_timestamp_opt(chrono::Utc::now().timestamp() + 60 * 60, 0).unwrap();
-    Ok((session_token, exp, "sign".to_string()))
+    Ok((fount_token))
 }

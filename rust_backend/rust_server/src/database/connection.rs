@@ -161,9 +161,8 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
     let user = get_user(result).await?;
     if user.id == Uuid::nil() {
         return Ok(None);
-    } else {
-        return Ok(Some(user));
     }
+    return Ok(Some(user));
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
