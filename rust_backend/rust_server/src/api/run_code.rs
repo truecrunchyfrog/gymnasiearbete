@@ -45,16 +45,32 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
         Error::InternalServerError
     })?;
 
-    while let Some(mut field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let name = field.name().ok_or(Error::InternalServerError)?.to_string();
+        let data = match field.bytes().await {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Failed to read bytes: {}", e);
+                return Err(Error::InternalServerError);
+            }
+        };
+
         println!("Length of `{}` is {} bytes", name, data.len());
 
         // Create a tempfile object from bytes
-        tmp_file.write_all(&data).unwrap();
+        match tmp_file.write_all(&data) {
+            Ok(()) => {}
+            Err(e) => {
+                error!("Failed to write to tempfile: {}", e);
+                return Err(Error::InternalServerError);
+            }
+        };
     }
 
-    gcc_container(tmp_file.into()).await.unwrap();
+    gcc_container(tmp_file.into()).await.map_err(|e| {
+        error!("Failed to build file: {}", e);
+        Error::InternalServerError
+    })?;
 
     let json = Json(json!({
         "message": "Successfully uploaded file"

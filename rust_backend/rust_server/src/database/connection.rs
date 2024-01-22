@@ -8,6 +8,7 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use dotenv::dotenv;
 use uuid::Uuid;
 
+#[allow(clippy::module_name_repetitions)]
 pub async fn establish_connection() -> Result<AsyncPgConnection> {
     dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -27,9 +28,8 @@ pub async fn create_user(new_user: NewUser) -> Result<Uuid> {
 }
 
 pub async fn upload_file(file: NewFile) -> Result<Uuid> {
+    use crate::schema::files::dsl::files;
     let mut conn = establish_connection().await?;
-
-    use crate::schema::files::dsl::*;
 
     info!("{:?}", file);
 

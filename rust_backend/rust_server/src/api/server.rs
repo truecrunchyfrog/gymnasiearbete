@@ -22,26 +22,21 @@ use uuid::Uuid;
 
 use crate::Error;
 
-#[debug_handler]
 pub async fn upload(
     State(_state): State<AppState>,
     headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<Uuid>> {
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let name = field.file_name().map(|s| s.to_string());
-        let data_result = field.bytes().await;
-        let data;
+    if let Ok(Some(field)) = multipart.next_field().await {
+        let name = field
+            .file_name()
+            .map(std::string::ToString::to_string)
+            .ok_or(Error::InternalServerError)?;
+        let data = field.bytes().await.map_err(|e| {
+            error!("{:?}", e);
+            Error::InternalServerError
+        })?;
 
-        match data_result {
-            Ok(o) => data = o,
-            Err(e) => {
-                error!("{:?}", e);
-                return Err(Error::InternalServerError);
-            }
-        }
-
-        let name = name.ok_or(Error::InternalServerError)?;
         let extension = get_extension_from_filename(&name).ok_or(Error::InternalServerError)?;
 
         let current_time = SystemTime::now()
@@ -49,7 +44,7 @@ pub async fn upload(
             .map(|d| d.as_secs().to_string())
             .map_err(|_| Error::InternalServerError)?;
 
-        let path_str = format!("./upload/{}.{}", current_time, extension);
+        let path_str = format!("./upload/{current_time}.{extension}");
         let upload_dir: &Path = Path::new(&path_str);
 
         let mut file = fs::OpenOptions::new()
@@ -66,7 +61,7 @@ pub async fn upload(
             Error::InternalServerError
         })?;
 
-        let user = get_user_from_token(headers).await?;
+        let user = get_user_from_token(headers.clone()).await?;
 
         let file = create_file(&name, &path_str, &"c".to_string(), user.id);
 
@@ -82,12 +77,10 @@ pub async fn upload(
 }
 
 // basic handler that responds with a static string
-#[debug_handler]
 pub async fn root(ctx: Ctx) -> Result<Json<String>> {
     Ok(Json(format!("Hello, {}!", ctx.user_id())))
 }
 
-#[debug_handler]
 pub async fn return_build_status(
     axum::extract::Path(file_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::Json<crate::database::Buildstatus>> {
@@ -116,7 +109,6 @@ pub async fn get_user_from_token(headers: HeaderMap) -> Result<User> {
     };
 }
 
-#[debug_handler]
 pub async fn get_user_info(ctx: Ctx) -> Result<Json<User>> {
     let user = crate::database::connection::get_user(ctx.user_id()).await?;
     return Ok(Json(user));
@@ -148,7 +140,6 @@ pub async fn get_user_files(ctx: Ctx) -> Result<Json<Vec<Value>>> {
     Ok(Json(json_of_files))
 }
 
-#[debug_handler]
 pub async fn get_server_status(headers: HeaderMap) -> Result<Json<crate::api::ServerStatus>> {
     return Ok(Json(crate::api::ServerStatus::new().await));
 }
