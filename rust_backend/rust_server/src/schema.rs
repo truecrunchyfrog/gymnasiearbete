@@ -18,8 +18,8 @@ diesel::table! {
         filename -> Varchar,
         #[max_length = 255]
         programming_language -> Varchar,
-        filesize -> Int4,
-        lastchanges -> Timestamp,
+        file_size -> Int4,
+        last_changes -> Timestamp,
         file_content -> Nullable<Bytea>,
         owner_uuid -> Uuid,
         build_status -> Buildstatus,
