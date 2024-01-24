@@ -2,7 +2,7 @@ pub mod authentication;
 mod create_account;
 mod hashing;
 mod log_in;
-mod run_code;
+pub mod run_code;
 mod server;
 mod server_status;
 mod session;

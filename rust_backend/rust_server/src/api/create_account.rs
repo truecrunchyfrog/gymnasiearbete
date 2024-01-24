@@ -76,13 +76,12 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
             "uuid": upload
         }
     }));
-    return Ok(body);
+    Ok(body)
 }
 
 fn verify_username(other_username: &str) -> bool {
     let re = Regex::new(r"^[a-zA-Z0-9]{6,16}$");
-    let is_allowed = re.map_or(false, |r| r.is_match(other_username));
-    is_allowed
+    re.map_or(false, |r| r.is_match(other_username))
 }
 
 fn verify_password(password: &str) -> bool {

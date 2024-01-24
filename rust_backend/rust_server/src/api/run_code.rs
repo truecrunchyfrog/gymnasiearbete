@@ -1,22 +1,25 @@
 use std::io::Write;
 
-use crate::{docker::api::gcc_container, Result};
+use crate::{
+    docker::api::{gcc_container, start_game_container},
+    Result,
+};
 use axum::{extract::Multipart, http::StatusCode, Json};
 use serde_json::{json, Value};
-use tempfile::tempfile;
+use tempfile::{tempfile, NamedTempFile};
 use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    ctx::Ctx, docker::api::configure_and_run_secure_container,
-    schema::session_tokens::user_uuid, Error,
+    ctx::Ctx, docker::api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
+    Error,
 };
 
 pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
     info!("Authenticated Successfully");
     // run demo code
-    match configure_and_run_secure_container().await {
-        Ok(()) => {
+    match configure_and_run_secure_container(String::new()).await {
+        Ok(_) => {
             info!("Successfully ran container");
             Ok(Json(json!({
                 "message": "Successfully ran container"
@@ -27,6 +30,17 @@ pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
             Err(Error::InternalServerError)
         }
     }
+}
+
+pub async fn run_user_bin(file: NamedTempFile, input: String) -> Result<String> {
+    let output = match configure_and_run_secure_container(input).await {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Failed to start user container: {}", e);
+            return Err(Error::InternalServerError);
+        }
+    };
+    Ok(output.logs)
 }
 
 async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
@@ -76,4 +90,15 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
         "message": "Successfully uploaded file"
     }));
     Ok(json)
+}
+
+pub async fn setup_game_container(program: NamedTempFile) -> Result<String> {
+    let output = match start_game_container(program).await {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Failed to start game container: {}", e);
+            return Err(Error::InternalServerError);
+        }
+    };
+    Ok(output.logs)
 }

@@ -32,6 +32,7 @@ mod database;
 mod docker;
 mod error;
 mod schema;
+mod simulation;
 mod tasks;
 mod utils;
 
@@ -47,6 +48,9 @@ pub fn check_docker_socket() -> bool {
 
 async fn startup_checks() -> Result<()> {
     info!("Initializing");
+
+    let mut game = simulation::sim::PingPong::new(1);
+    simulation::sim::start_game(&mut game);
 
     #[cfg(not(unix))]
     {

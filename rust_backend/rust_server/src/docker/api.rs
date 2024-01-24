@@ -9,6 +9,8 @@ use futures::{StreamExt, TryStreamExt};
 use tempfile::{tempfile, NamedTempFile};
 use tokio::fs::File;
 
+use crate::schema::files::id;
+
 struct ContainerPreset {
     name: String,
     image: String,
@@ -208,7 +210,23 @@ pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn configure_and_run_secure_container() -> Result<(), anyhow::Error> {
+pub async fn send_stdin_to_container(
+    docker: &Docker,
+    container_id: &str,
+    stdin: &str,
+) -> Result<(), anyhow::Error> {
+    let config = CreateExecOptions {
+        cmd: Some(vec![stdin.to_string()]),
+        ..Default::default()
+    };
+    docker.create_exec(container_id, config).await?;
+
+    Ok(())
+}
+
+pub async fn configure_and_run_secure_container(
+    input: String,
+) -> Result<ContainerOutput, anyhow::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
 
@@ -229,12 +247,18 @@ pub async fn configure_and_run_secure_container() -> Result<(), anyhow::Error> {
 
     copy_file_into_container(&docker, &container_id, test_file_path, "/").await?;
     start_container(&docker, &container_id).await?;
-    pull_logs(&docker, &container_id).await?;
+    send_stdin_to_container(&docker, &container_id, &input).await?;
+    let container_logs = pull_logs(&docker, &container_id).await?;
 
     stop_container(&docker, &container_id).await?;
     //remove_container(&docker, &container_id).await?;
+    let output = ContainerOutput {
+        logs: container_logs,
+        id: container_id.parse::<i32>()?,
+        exit_code: 0,
+    };
 
-    Ok(())
+    Ok(output)
 }
 
 fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyhow::Error> {
@@ -244,4 +268,41 @@ fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyh
     tar.append_path_with_name(file_path, "app/program.o")?;
 
     Ok(tar.into_inner()?)
+}
+
+pub struct ContainerOutput {
+    pub logs: String,
+    pub id: i32,
+    pub exit_code: i64,
+}
+
+pub async fn start_game_container(
+    program: NamedTempFile,
+) -> Result<ContainerOutput, anyhow::Error> {
+    let docker = Docker::connect_with_local_defaults()?;
+
+    let program_path = match program.path().to_str() {
+        Some(o) => o,
+        None => return Err(anyhow::anyhow!("Failed to get path")),
+    };
+
+    let preset = ContainerPreset {
+        name: "game".to_string(),
+        image: "clearlinux/os-core".to_string(),
+        cmd: vec!["/app/program.o".to_string()],
+    };
+
+    remove_old_container(&docker, &preset.name).await?;
+
+    let container_id = create_container(&docker, &preset).await?;
+
+    copy_file_into_container(&docker, &container_id, program_path, "/").await?;
+    start_container(&docker, &container_id).await?;
+    let logs = pull_logs(&docker, &container_id).await?;
+    let output: ContainerOutput = ContainerOutput {
+        logs,
+        id: container_id.parse::<i32>()?,
+        exit_code: 0,
+    };
+    Ok(output)
 }
