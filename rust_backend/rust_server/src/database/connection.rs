@@ -49,43 +49,6 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid> {
     }
 }
 
-pub async fn get_build_status(file_id: Uuid) -> Result<crate::database::models::Buildstatus> {
-    use crate::schema::files::dsl::{build_status, files, id};
-
-    let mut conn = establish_connection().await?;
-
-    let result = files
-        .filter(id.eq(file_id))
-        .select(build_status)
-        .first(&mut conn)
-        .await
-        .map_err(|err| Error::DatabaseConnectionFail);
-
-    result
-}
-
-pub async fn update_build_status(
-    file_id: Uuid,
-    new_status: crate::database::models::Buildstatus,
-) -> Result<crate::database::models::Buildstatus> {
-    use crate::schema::files::dsl::{build_status, files, id};
-
-    let mut conn = establish_connection().await?;
-
-    diesel::update(files.filter(id.eq(file_id)))
-        .set(build_status.eq(new_status))
-        .execute(&mut conn)
-        .await
-        .map_err(|err| Error::DatabaseQueryFail)?;
-
-    return files
-        .filter(id.eq(file_id))
-        .select(build_status)
-        .first::<crate::database::models::Buildstatus>(&mut conn)
-        .await
-        .map_err(|err| Error::DatabaseQueryFail);
-}
-
 pub async fn username_exists(target_username: &str) -> Result<bool> {
     use crate::schema::users::dsl::{username, users};
     let mut conn = establish_connection().await?;

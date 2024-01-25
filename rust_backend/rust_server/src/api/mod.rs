@@ -1,5 +1,6 @@
 pub mod authentication;
 mod create_account;
+pub mod file_upload;
 mod hashing;
 mod log_in;
 pub mod run_code;

@@ -20,6 +20,7 @@ pub struct SignUp {
 }
 
 pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json<Value>> {
+    info!("Registering account: {:?}", payload);
     // check username
     if !verify_username(&payload.username) {
         let body = Json(json!({

@@ -25,6 +25,28 @@ use uuid::Uuid;
 
 use super::session;
 
+async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
+    let token = token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
+    match parse_token(token) {
+        Ok(token_id) => {
+            let user = connection::get_token_owner(&token_id)
+                .await
+                .map_err(|_| Error::AuthFailTokenWrongFormat)?
+                .ok_or(Error::AuthFailTokenWrongFormat)?;
+
+            let user_id = user.id.to_string();
+
+            Ok(Ctx::new(Uuid::from_str(user_id.as_str()).map_err(
+                |_| {
+                    error!("Failed to parse user_id from token");
+                    Error::AuthFailTokenWrongFormat
+                },
+            )?))
+        }
+        Err(e) => Err(e),
+    }
+}
+
 pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -> Result<Response> {
     println!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
 
@@ -45,31 +67,13 @@ pub async fn mw_ctx_resolver(
     let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
 
     // Compute Result<Ctx>.
-    let result_ctx = match auth_token
-        .clone()
-        .ok_or(Error::AuthFailNoAuthTokenCookie)
-        .and_then(parse_token)
-    {
-        Ok((token_id)) => {
-            let user = connection::get_token_owner(&token_id)
-                .await?
-                .ok_or(Error::AuthFailTokenWrongFormat)?;
-
-            let user_id = user.id.to_string();
-
-            Ok(Ctx::new(Uuid::from_str(user_id.as_str()).map_err(
-                |_| {
-                    error!("Failed to parse user_id from token");
-                    Error::AuthFailTokenWrongFormat
-                },
-            )?))
-        }
-        Err(e) => Err(e),
-    };
+    let result_ctx = get_new_ctx(auth_token).await;
 
     // Remove the cookie if something went wrong other than NoAuthTokenCookie.
-    if result_ctx.is_err() && !matches!(result_ctx, Err(Error::AuthFailNoAuthTokenCookie)) {
-        cookies.remove(Cookie::from(AUTH_TOKEN));
+    if let Err(e) = &result_ctx {
+        if !matches!(e, Error::AuthFailNoAuthTokenCookie) {
+            cookies.remove(Cookie::from(AUTH_TOKEN));
+        }
     }
 
     // Store the ctx_result in the request extension.

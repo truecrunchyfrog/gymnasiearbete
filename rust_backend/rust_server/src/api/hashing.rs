@@ -10,8 +10,11 @@ pub fn check_password(password: &str, password_hash: &str) -> bool {
     if let Ok(ref parsed_hash) = PasswordHash::new(password_hash) {
         let result = argon2.verify_password(password.as_bytes(), &parsed_hash);
         match result {
-            Ok(()) => true,
-            Err(_) => false,
+            Ok(()) => return true,
+            Err(e) => {
+                error!("Error verifying password: {:?}", e);
+                return false;
+            }
         };
     }
     false

@@ -99,7 +99,6 @@ async fn main() -> Result<()> {
         // `GET /` goes to `root`
         .route("/", get(api::root))
         .route("/upload", post(api::upload))
-        .route("/status/:file_id", get(api::return_build_status))
         .route("/register", post(api::register_account))
         .route("/login", post(api::login_route))
         .route("/profile", get(api::get_user_info))

@@ -6,15 +6,6 @@ use diesel::{sql_types::Nullable, Queryable, Selectable};
 use serde::Serialize;
 use uuid::Uuid;
 
-#[derive(diesel_derive_enum::DbEnum, Debug, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::Buildstatus"]
-pub enum Buildstatus {
-    NotStarted,
-    Started,
-    Done,
-    Failed,
-}
-
 #[derive(Insertable, Queryable)]
 #[diesel(table_name = users)]
 pub struct NewUser {
@@ -36,26 +27,20 @@ pub struct User {
 #[derive(Insertable, Queryable, Debug)]
 #[diesel(table_name = files)]
 pub struct NewFile {
-    pub filename: String,
-    pub programming_language: String,
     pub file_size: i32,
-    pub last_changes: NaiveDateTime,
     pub file_content: Option<Vec<u8>>,
     pub owner_uuid: Uuid,
-    pub build_status: Buildstatus,
 }
 
 #[derive(Insertable, Queryable, Debug)]
 #[diesel(table_name = files)]
 pub struct InsertedFile {
     pub id: uuid::Uuid,
-    pub filename: String,
-    pub programming_language: String,
+
     pub file_size: i32,
-    pub last_changes: NaiveDateTime,
+
     pub file_content: Option<Vec<u8>>,
     pub owner_uuid: Uuid,
-    pub build_status: crate::database::models::Buildstatus,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
@@ -64,13 +49,11 @@ pub struct InsertedFile {
 #[allow(clippy::struct_field_names)]
 pub struct File {
     pub id: Uuid,
-    pub filename: String,
-    pub programming_language: String,
+
     pub file_size: i32,
-    pub last_changes: NaiveDateTime,
+
     pub file_content: Option<Vec<u8>>,
     pub owner_uuid: Uuid,
-    pub build_status: Buildstatus,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]

@@ -2,8 +2,8 @@ use bollard::exec::CreateExecOptions;
 use std::io::Read;
 use tokio::io::AsyncReadExt;
 
-use bollard::container::UploadToContainerOptions;
 use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
+use bollard::container::{DownloadFromContainerOptions, UploadToContainerOptions};
 use bollard::Docker;
 use futures::{StreamExt, TryStreamExt};
 use tempfile::{tempfile, NamedTempFile};
@@ -184,6 +184,23 @@ async fn run_command_in_container(
     Ok(())
 }
 
+async fn get_file_from_container(
+    docker: &Docker,
+    container_id: &str,
+    file_path: &str,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let options = Some(DownloadFromContainerOptions { path: file_path });
+    let stream = docker.download_from_container(container_id, options);
+    // Use try_fold to accumulate the bytes into a Vec<u8>
+    let bytes = stream
+        .try_fold(Vec::new(), |mut acc, bytes| async move {
+            acc.extend(bytes);
+            Ok(acc)
+        })
+        .await?;
+    Ok(bytes)
+}
+
 pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
     todo!();
     let test_file_path = "./rust_server/demo_code/program.c";
@@ -203,7 +220,7 @@ pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
     copy_file_into_container(&docker, &container_id, test_file_path, "/app").await?;
     start_container(&docker, &container_id).await?;
     pull_logs(&docker, &container_id).await?;
-
+    let compiled_file = get_file_from_container(&docker, &container_id, "/app/program.o").await?; // in tar.gz format
     stop_container(&docker, &container_id).await?;
     //remove_container(&docker, &container_id).await?;
 
