@@ -4,7 +4,13 @@ use crate::{
     docker::api::{gcc_container, start_game_container},
     Result,
 };
-use axum::{extract::Multipart, http::StatusCode, Json};
+use axum::{
+    debug_handler,
+    extract::{self, Multipart},
+    http::StatusCode,
+    Json,
+};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tempfile::{tempfile, NamedTempFile};
 use tokio::{fs::File, io::AsyncWriteExt};
@@ -51,6 +57,21 @@ async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> 
         },
         None => return Err(Error::FileNotFound),
     };
+}
+
+#[derive(Deserialize)]
+pub struct BuildInfo {
+    file_id: String,
+}
+
+#[debug_handler]
+pub async fn build_file(ctx: Ctx, payload: Json<BuildInfo>) -> Result<Json<Value>> {
+    let file_id = payload.file_id.clone();
+    let body = json!({
+        "status":"success",
+        "file_id": file_id,
+    });
+    Ok(axum::Json(body))
 }
 
 async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {

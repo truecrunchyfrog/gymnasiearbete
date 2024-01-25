@@ -105,6 +105,7 @@ async fn main() -> Result<()> {
         .route("/files", get(api::get_user_files))
         .route("/info", get(api::get_server_status))
         .route("/run", post(api::run_user_code))
+        .route("/build", post(api::run_code::build_file))
         .layer(middleware::map_response(main_response_mapper))
         .layer(middleware::from_fn(api::authentication::mw_ctx_resolver))
         .layer(CookieManagerLayer::new())

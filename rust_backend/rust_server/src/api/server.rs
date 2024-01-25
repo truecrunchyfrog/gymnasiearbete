@@ -87,14 +87,16 @@ pub async fn get_user_files(ctx: Ctx) -> Result<Json<Vec<Value>>> {
     let user_id = ctx.user_id();
     let user = get_user(user_id).await?;
 
-    let files: Vec<Uuid> = get_files_from_user(user.id).await?;
+    let files = get_files_from_user(user.id).await?;
     let mut json_of_files: Vec<Value> = Vec::new();
+    // create json like this {files: []}
     for file in files {
-        let file_json = json!({
-            "id": file
+        let file = json!({
+            "file_id": file.to_string(),
         });
-        json_of_files.push(file_json);
+        json_of_files.push(file);
     }
+
     Ok(Json(json_of_files))
 }
 
