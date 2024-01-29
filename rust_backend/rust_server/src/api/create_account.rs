@@ -70,7 +70,7 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
         return Ok(body);
     }
 
-    let upload = upload_user(&payload.username, password_hash, password_salt.to_string()).await?;
+    let upload = upload_user(&payload.username, password_hash).await?;
     let body = Json(json!({
         "result": {
             "success": true,
@@ -95,12 +95,11 @@ fn verify_password(password: &str) -> bool {
     has_lowercase && has_uppercase && has_digit && has_special && is_length_valid
 }
 
-async fn upload_user(other_username: &str, hash: String, salt: String) -> Result<Uuid> {
+async fn upload_user(other_username: &str, hash: String) -> Result<Uuid> {
     let new_user = NewUser {
         id: Uuid::new_v4(),
         username: other_username.to_string(),
         password_hash: hash,
-        salt,
     };
     crate::database::connection::create_user(new_user).await
 }

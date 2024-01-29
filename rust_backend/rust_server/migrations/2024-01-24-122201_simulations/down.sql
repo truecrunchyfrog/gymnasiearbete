@@ -1,4 +1,4 @@
 -- This file should undo anything in `up.sql`
-DROP IF EXISTS TYPE simulation_result;
+DROP TABLE IF EXISTS simulations;
 
-DROP IF EXISTS TABLE simulations;
+DROP TYPE IF EXISTS simulation_result;

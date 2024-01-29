@@ -37,7 +37,6 @@ diesel = { version = "2.1.4", features = [
     "uuid",
     "chrono",
 ] }
-diesel-async = { version = "0.4.1", features = ["postgres", "tokio-postgres"] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 dotenv = "0.15.0"
 env_logger = "0.10.0"
@@ -59,6 +58,7 @@ tower-cookies = "0.10.0"
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 anyhow = "1.0.75"
 tower-http = { version = "0.5.1", features = ["timeout", "trace"] }
+diesel_migrations = { version = "2.1.0", features = ["postgres"] }
 
 [dev-dependencies]
 httpc-test = "0.1.8"

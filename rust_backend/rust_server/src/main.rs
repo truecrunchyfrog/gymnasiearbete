@@ -13,7 +13,6 @@ use axum::routing::{get, get_service, post};
 use axum::{middleware, Json, Router};
 
 use ctx::Ctx;
-use database::check_connection;
 use env_logger::Builder;
 use log::LevelFilter;
 use serde_json::json;
@@ -63,18 +62,9 @@ async fn startup_checks() -> Result<()> {
             warn!("Warning! Docker socket does not exist!");
         }
     }
-
-    let connection_status = check_connection().await;
-    match connection_status {
-        Ok(_) => {
-            info!("Database connection established");
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to connect to database: {:?}", e);
-            return Err(e);
-        }
-    }
+    info!("Running database migrations");
+    database::connection::run_migrations();
+    Ok(())
 }
 
 #[tokio::main]

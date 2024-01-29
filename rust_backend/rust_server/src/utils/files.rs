@@ -18,6 +18,10 @@ pub fn create_file(file_name: &str, file_path: &str, language: &str, user_id: Uu
 
         file_content: Some(file_content),
         owner_uuid: user_id,
+        file_type: None,
+        created_at: Some(Utc::now().naive_utc()),
+        last_modified_at: Some(Utc::now().naive_utc()),
+        parent_id: None,
     };
     return file;
 }

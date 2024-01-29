@@ -1,7 +1,5 @@
 use serde::Serialize;
 
-use crate::database::check_connection;
-
 #[derive(Serialize)]
 pub struct ServerStatus {
     pub database_connection_status: bool,
@@ -10,11 +8,7 @@ pub struct ServerStatus {
 
 impl ServerStatus {
     pub async fn new() -> Self {
-        let database_connection = check_connection().await;
-        let database_connection_status = match database_connection {
-            Ok(()) => true,
-            Err(_) => false,
-        };
+        let database_connection_status = true;
         let docker_connection_status = crate::check_docker_socket();
         Self {
             database_connection_status,

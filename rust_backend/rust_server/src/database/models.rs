@@ -12,7 +12,6 @@ pub struct NewUser {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
-    pub salt: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Serialize)]
@@ -21,26 +20,35 @@ pub struct User {
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
-    pub salt: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub last_login_at: Option<chrono::NaiveDateTime>,
+    pub login_count: Option<i32>,
+    pub is_admin: Option<bool>,
 }
 
 #[derive(Insertable, Queryable, Debug)]
 #[diesel(table_name = files)]
 pub struct NewFile {
     pub file_size: i32,
+    pub file_type: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub last_modified_at: Option<chrono::NaiveDateTime>,
+    pub parent_id: Option<uuid::Uuid>,
     pub file_content: Option<Vec<u8>>,
     pub owner_uuid: Uuid,
 }
 
-#[derive(Insertable, Queryable, Debug)]
+#[derive(Queryable, Insertable, Debug)]
 #[diesel(table_name = files)]
 pub struct InsertedFile {
     pub id: uuid::Uuid,
-
     pub file_size: i32,
-
     pub file_content: Option<Vec<u8>>,
-    pub owner_uuid: Uuid,
+    pub owner_uuid: uuid::Uuid,
+    pub file_type: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub last_modified_at: Option<chrono::NaiveDateTime>,
+    pub parent_id: Option<uuid::Uuid>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
@@ -48,12 +56,15 @@ pub struct InsertedFile {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 #[allow(clippy::struct_field_names)]
 pub struct File {
-    pub id: Uuid,
+    pub id: uuid::Uuid,
 
     pub file_size: i32,
-
-    pub file_content: Option<Vec<u8>>,
+    pub file_type: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub last_modified_at: Option<chrono::NaiveDateTime>,
+    pub parent_id: Option<uuid::Uuid>,
     pub owner_uuid: Uuid,
+    pub file_content: Option<Vec<u8>>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
