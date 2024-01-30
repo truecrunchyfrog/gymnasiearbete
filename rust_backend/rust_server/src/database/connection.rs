@@ -15,9 +15,15 @@ use uuid::Uuid;
 #[allow(clippy::module_name_repetitions)]
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+
+    let mut conn = PgConnection::establish(&database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
+    if cfg!(test) {
+        conn.begin_test_transaction().unwrap();
+    }
+    conn
 }
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -37,6 +43,7 @@ pub fn run_migrations() -> anyhow::Result<(), Box<dyn std::error::Error + Send +
 
 pub async fn create_user(new_user: NewUser) -> Result<Uuid> {
     let mut conn = establish_connection();
+
     diesel::insert_into(crate::schema::users::table)
         .values(&new_user)
         .execute(&mut conn)

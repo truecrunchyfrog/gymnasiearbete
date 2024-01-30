@@ -23,7 +23,19 @@ pub struct UserLogin {
 pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Result<Json<Value>> {
     println!("->> {:<12} - api_login", "HANDLER");
 
-    let user = get_user_from_username(&payload.username).await?;
+    let user = match get_user_from_username(&payload.username).await {
+        Ok(u) => u,
+        Err(e) => {
+            error!("Failed to get user from username: {}", e);
+            let body = Json(json!({
+                "result": {
+                    "success": false,
+                    "reason": "User not found"
+                }
+            }));
+            return Ok(body);
+        }
+    };
 
     let user_hash = user.password_hash.clone();
 

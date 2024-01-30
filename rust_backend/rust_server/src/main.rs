@@ -15,7 +15,7 @@ use axum::{middleware, Json, Router};
 use ctx::Ctx;
 use env_logger::Builder;
 use log::LevelFilter;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use tasks::TaskManager;
 use tokio::net::TcpListener;
@@ -33,6 +33,7 @@ mod error;
 mod schema;
 mod simulation;
 mod tasks;
+mod tests;
 mod utils;
 
 #[derive(Clone)]

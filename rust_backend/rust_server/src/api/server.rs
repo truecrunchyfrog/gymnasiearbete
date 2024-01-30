@@ -45,8 +45,8 @@ pub async fn upload(
 }
 
 // basic handler that responds with a static string
-pub async fn root(ctx: Ctx) -> Result<Json<String>> {
-    Ok(Json(format!("Hello, {}!", ctx.user_id())))
+pub async fn root() -> Result<Json<Value>> {
+    Ok(json!("Hello, World!").into())
 }
 
 pub async fn get_user_from_token(headers: HeaderMap) -> Result<User> {

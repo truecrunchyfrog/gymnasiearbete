@@ -59,6 +59,7 @@ uuid = { version = "1.4.1", features = ["v4", "serde"] }
 anyhow = "1.0.75"
 tower-http = { version = "0.5.1", features = ["timeout", "trace"] }
 diesel_migrations = { version = "2.1.0", features = ["postgres"] }
+axum-test = "14.2.2"
 
 [dev-dependencies]
 httpc-test = "0.1.8"
