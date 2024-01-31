@@ -1,3 +1,5 @@
+use crate::api::create_account::register_account;
+use crate::api::log_in::login_route;
 use crate::{api, main_response_mapper};
 use axum::routing::post;
 use axum::{middleware, Json, Router};
@@ -8,8 +10,8 @@ use tower_cookies::CookieManagerLayer;
 
 fn get_server() -> TestServer {
     let app = Router::new()
-        .route("/register", post(api::register_account))
-        .route("/login", post(api::login_route))
+        .route("/register", post(register_account))
+        .route("/login", post(login_route))
         .layer(CookieManagerLayer::new());
     let config = axum_test::TestServerConfig::builder()
         .default_content_type("application/json")

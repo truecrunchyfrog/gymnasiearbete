@@ -1,4 +1,4 @@
-use super::check_password;
+use crate::api::hashing::check_password;
 use crate::Json;
 use crate::Result;
 use crate::{
@@ -72,7 +72,9 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
     // Create the success body.
     let body = Json(json!({
         "result": {
-            "success": true
+            "success": true,
+            "token": token,
+
         }
     }));
 

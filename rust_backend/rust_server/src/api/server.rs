@@ -1,3 +1,4 @@
+use crate::api::server_status::ServerStatus;
 use crate::ctx::Ctx;
 use crate::database::connection::{get_files_from_user, get_token_owner, get_user, upload_file};
 use crate::database::User;
@@ -9,7 +10,6 @@ use axum::http::header::AUTHORIZATION;
 use axum::http::{HeaderMap, StatusCode};
 use axum::{debug_handler, Json};
 use serde_json::{json, Value};
-
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -100,6 +100,6 @@ pub async fn get_user_files(ctx: Ctx) -> Result<Json<Vec<Value>>> {
     Ok(Json(json_of_files))
 }
 
-pub async fn get_server_status(headers: HeaderMap) -> Result<Json<crate::api::ServerStatus>> {
-    return Ok(Json(crate::api::ServerStatus::new().await));
+pub async fn get_server_status(headers: HeaderMap) -> Result<Json<ServerStatus>> {
+    return Ok(Json(ServerStatus::new().await));
 }

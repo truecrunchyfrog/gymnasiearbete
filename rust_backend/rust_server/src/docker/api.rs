@@ -11,11 +11,8 @@ use tokio::fs::File;
 
 use crate::schema::files::id;
 
-struct ContainerPreset {
-    name: String,
-    image: String,
-    cmd: Vec<String>,
-}
+use crate::docker::profiles::ContainerPreset;
+use crate::docker::profiles::EXAMPLE_PROFILE;
 
 async fn start_container(
     docker: &Docker,
@@ -29,43 +26,16 @@ async fn start_container(
     Ok(())
 }
 
-async fn create_container(
+async fn create_container<'a>(
     docker: &Docker,
     preset: &ContainerPreset,
 ) -> Result<String, bollard::errors::Error> {
     info!("Creating container");
 
-    let options = Some(CreateContainerOptions {
-        name: preset.name.clone(),
-        platform: None,
-    });
-
-    let host_config = bollard::service::HostConfig {
-        auto_remove: Some(true),
-        memory: Some(8_000_000), // 8MB
-        pids_limit: Some(1),
-        network_mode: Some("none".to_string()),
-        restart_policy: Some(bollard::service::RestartPolicy {
-            name: Some(bollard::service::RestartPolicyNameEnum::NO),
-            maximum_retry_count: Some(0),
-        }),
-        cap_drop: Some(vec!["ALL".to_string()]),
-        cgroupns_mode: Some(bollard::service::HostConfigCgroupnsModeEnum::PRIVATE),
-        readonly_paths: Some(vec!["/".to_string()]),
-
-        ..Default::default()
-    };
-
-    let config = Config {
-        image: Some(preset.image.clone()),
-        network_disabled: Some(true),
-        stop_timeout: Some(1),
-        host_config: Some(host_config),
-        cmd: Some(preset.cmd.clone()),
-        ..Default::default()
-    };
-
-    let container = docker.create_container(options, config);
+    let container = docker.create_container(
+        Some(preset.create_options.clone()),
+        preset.container_config.clone(),
+    );
     let container_id = match container.await {
         Ok(o) => o.id,
         Err(e) => return Err(e),
@@ -86,17 +56,13 @@ async fn remove_old_container(
     Ok(())
 }
 
-async fn pull_logs(docker: &Docker, container_id: &str) -> Result<String, bollard::errors::Error> {
+async fn pull_logs(
+    docker: &Docker,
+    container_id: &str,
+    preset: &ContainerPreset,
+) -> Result<String, bollard::errors::Error> {
     // Pull logs until the container stops
-    let mut logs_stream = docker.logs(
-        container_id,
-        Some(bollard::container::LogsOptions::<String> {
-            follow: true,
-            stdout: true,
-            stderr: true,
-            ..Default::default()
-        }),
-    );
+    let mut logs_stream = docker.logs(container_id, Some(preset.logs_options.clone()));
     let mut logs = String::new();
     while let Some(log) = logs_stream.try_next().await? {
         logs.push_str(&log.to_string());
@@ -151,18 +117,13 @@ async fn remove_container(
 pub async fn hello_world_container_test() -> Result<(), bollard::errors::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
-
-    let preset = ContainerPreset {
-        name: "hello-world".to_string(),
-        image: "hello-world".to_string(),
-        cmd: vec!["/hello".to_string()],
-    };
+    let preset = EXAMPLE_PROFILE;
 
     remove_old_container(&docker, "hello-world").await?;
 
     let container_id = create_container(&docker, &preset).await?;
     start_container(&docker, &container_id).await?;
-    pull_logs(&docker, &container_id).await?;
+    pull_logs(&docker, &container_id, &preset).await?;
 
     stop_container(&docker, &container_id).await?;
     remove_container(&docker, &container_id).await?;
@@ -203,26 +164,6 @@ async fn get_file_from_container(
 
 pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
     todo!();
-    let test_file_path = "./rust_server/demo_code/program.c";
-    let docker = Docker::connect_with_local_defaults()?;
-    let preset = ContainerPreset {
-        name: "gcc".to_string(),
-        image: "_/gcc".to_string(),
-        cmd: vec![
-            "gcc".to_string(),
-            "-o".to_string(),
-            "/app/program.o".to_string(),
-            "/app/program.c".to_string(),
-        ],
-    };
-    remove_old_container(&docker, &preset.name).await?;
-    let container_id = create_container(&docker, &preset).await?;
-    copy_file_into_container(&docker, &container_id, test_file_path, "/app").await?;
-    start_container(&docker, &container_id).await?;
-    pull_logs(&docker, &container_id).await?;
-    let compiled_file = get_file_from_container(&docker, &container_id, "/app/program.o").await?; // in tar.gz format
-    stop_container(&docker, &container_id).await?;
-    //remove_container(&docker, &container_id).await?;
 
     Ok(())
 }
@@ -243,18 +184,12 @@ pub async fn send_stdin_to_container(
 
 pub async fn configure_and_run_secure_container(
     input: String,
+    preset: ContainerPreset,
 ) -> Result<ContainerOutput, anyhow::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
 
     let test_file_path = "./rust_server/demo_code/program.o";
-
-    let preset = ContainerPreset {
-        name: "clear".to_string(),
-        image: "clearlinux/os-core".to_string(),
-        cmd: vec!["/app/program.o".to_string()],
-        //cmd: vec!["/tmp/program.o".to_string()],
-    };
 
     remove_old_container(&docker, &preset.name).await?;
 
@@ -265,7 +200,7 @@ pub async fn configure_and_run_secure_container(
     copy_file_into_container(&docker, &container_id, test_file_path, "/").await?;
     start_container(&docker, &container_id).await?;
     send_stdin_to_container(&docker, &container_id, &input).await?;
-    let container_logs = pull_logs(&docker, &container_id).await?;
+    let container_logs = pull_logs(&docker, &container_id, &preset).await?;
 
     stop_container(&docker, &container_id).await?;
     //remove_container(&docker, &container_id).await?;
@@ -295,6 +230,7 @@ pub struct ContainerOutput {
 
 pub async fn start_game_container(
     program: NamedTempFile,
+    preset: ContainerPreset,
 ) -> Result<ContainerOutput, anyhow::Error> {
     let docker = Docker::connect_with_local_defaults()?;
 
@@ -303,19 +239,13 @@ pub async fn start_game_container(
         None => return Err(anyhow::anyhow!("Failed to get path")),
     };
 
-    let preset = ContainerPreset {
-        name: "game".to_string(),
-        image: "clearlinux/os-core".to_string(),
-        cmd: vec!["/app/program.o".to_string()],
-    };
-
     remove_old_container(&docker, &preset.name).await?;
 
     let container_id = create_container(&docker, &preset).await?;
 
     copy_file_into_container(&docker, &container_id, program_path, "/").await?;
     start_container(&docker, &container_id).await?;
-    let logs = pull_logs(&docker, &container_id).await?;
+    let logs = pull_logs(&docker, &container_id, &preset).await?;
     let output: ContainerOutput = ContainerOutput {
         logs,
         id: container_id.parse::<i32>()?,

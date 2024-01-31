@@ -1,9 +1,13 @@
 #[macro_use]
 extern crate log;
 
-pub use self::error::{Error, Result};
+use self::error::{Error, Result};
 use tokio::time::Duration;
 
+use crate::api::create_account::register_account;
+use crate::api::log_in::login_route;
+use crate::api::run_code::{build_file, run_user_code};
+use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
 use crate::tasks::start_task_thread;
 
 use axum::extract::{Path, Query};
@@ -35,6 +39,8 @@ mod simulation;
 mod tasks;
 mod tests;
 mod utils;
+
+use api::server::root;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -88,15 +94,15 @@ async fn main() -> Result<()> {
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
-        .route("/", get(api::root))
-        .route("/upload", post(api::upload))
-        .route("/register", post(api::register_account))
-        .route("/login", post(api::login_route))
-        .route("/profile", get(api::get_user_info))
-        .route("/files", get(api::get_user_files))
-        .route("/info", get(api::get_server_status))
-        .route("/run", post(api::run_user_code))
-        .route("/build", post(api::run_code::build_file))
+        .route("/", get(root))
+        .route("/upload", post(upload))
+        .route("/register", post(register_account))
+        .route("/login", post(login_route))
+        .route("/profile", get(get_user_info))
+        .route("/files", get(get_user_files))
+        .route("/info", get(get_server_status))
+        .route("/run", post(run_user_code))
+        .route("/build", post(build_file))
         .layer(middleware::map_response(main_response_mapper))
         .layer(middleware::from_fn(api::authentication::mw_ctx_resolver))
         .layer(CookieManagerLayer::new())
