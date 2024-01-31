@@ -39,7 +39,7 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
 
     let user_hash = user.password_hash.clone();
 
-    if !check_password(&payload.pwd, &user_hash) {
+    if !check_password(&payload.password, &user_hash) {
         let body = Json(json!({
             "result": {
                 "success": false,
@@ -74,7 +74,6 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
         "result": {
             "success": true,
             "token": token,
-
         }
     }));
 
@@ -84,7 +83,7 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
 pub fn get_session_expiration() -> DateTime<Utc> {
     let now = Utc::now();
     let in_one_week = now + Duration::days(7);
-    return in_one_week;
+    in_one_week
 }
 
 pub fn generate_session_token() -> String {
@@ -109,5 +108,5 @@ fn create_cookie(token: UploadToken) -> String {
 #[derive(Debug, Deserialize)]
 pub struct LoginPayload {
     username: String,
-    pwd: String,
+    password: String,
 }
