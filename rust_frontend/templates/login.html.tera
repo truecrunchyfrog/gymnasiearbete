@@ -1,0 +1,31 @@
+{% extends "base" %}
+
+{% block title %}log in{% endblock %}
+
+{% block content %}
+
+{% if err_msg %}
+<div class="ui negative message">{{ err_msg }}</div>
+{% endif %}
+
+{% if succ_msg %}
+<div class="ui positive message">{{ succ_msg }}</div>
+{% endif %}
+
+<h1>welcome back to σ<span id="display-name"></span></h1>
+<p>just enter your credentials :)</p>
+
+<form action="/login" method="post">
+    <div class="ui input">
+        <input type="text" name="username" placeholder="username" oninput="document.getElementById('display-name').innerText = this.value ? ', ' + this.value : ''" autofocus>
+    </div>
+    <div class="ui input">
+        <input type="password" name="password" placeholder="password">
+    </div>
+
+    <br><br>
+
+    <input class="ui primary button" type="submit" value="log in">
+</form>
+
+{% endblock %}

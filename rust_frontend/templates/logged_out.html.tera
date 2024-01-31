@@ -1,0 +1,20 @@
+{% extends "base" %}
+
+{% block title %}time to log in{% endblock %}
+
+{% block content %}
+
+{% if info_msg %}
+<div class="ui blue message">{{ info_msg }}</div>
+{% endif %}
+
+<h1>log in to begin;</h1>
+<a href="/login">
+    <button class="ui button green">i have an account already (log in)</button>
+</a>
+<br><br>
+<a href="/register">
+    <button class="ui button olive">i need an account (register)</button>
+</a>
+
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base" %}
+
+{% block title %}register{% endblock %}
+
+{% block content %}
+
+{% if err_msg %}
+<div class="ui negative message">{{ err_msg }}</div>
+{% endif %}
+
+<h1>get upset with σ<span id="display-name"></span></h1>
+<p>it's as easy as picking a name and a password, except the <b>username</b> must be between <b>6 and 16</b> characters and contain <b>only alphanumeric</b> characters, and the <b>password</b> must be at least <b>8 characters</b> long and contain at least one <b>uppercase</b> letter, one <b>lowercase</b> letter, one <b>digit</b>, and one <b>special character</b>.</p>
+
+<form action="/register" method="post">
+    <div class="ui input">
+        <input type="text" name="username" placeholder="username" oninput="document.getElementById('display-name').innerText = this.value ? ', ' + this.value : ''" autofocus>
+    </div>
+    <div class="ui input">
+        <input type="password" name="password" placeholder="password">
+    </div>
+
+    <input class="ui primary button" type="submit" value="register">
+</form>
+
+{% endblock %}

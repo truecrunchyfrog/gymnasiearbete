@@ -1,6 +1,11 @@
 {% extends "base" %}
 
+{% block title %}home{% endblock %}
+
 {% block content %}
-<h1>Like strategic games, but automated.</h1>
+
+<a href="/publish-program">
+    <button class="ui green button">publish a program</button>
+</a>
 
 {% endblock %}
