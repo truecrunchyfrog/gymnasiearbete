@@ -32,7 +32,7 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
         return Ok(body);
     }
     // verify password
-    if !verify_password(&payload.pwd) {
+    if !verify_password(&payload.password) {
         let body = Json(json!({
             "result": {
                 "success": false,
@@ -58,7 +58,7 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
     let argon2 = Argon2::default();
 
     let mut password_hash = String::default();
-    if let Ok(ref p_hash) = argon2.hash_password(payload.pwd.as_bytes(), &password_salt) {
+    if let Ok(ref p_hash) = argon2.hash_password(payload.password.as_bytes(), &password_salt) {
         password_hash = p_hash.to_string();
     } else {
         let body = Json(json!({
@@ -107,5 +107,5 @@ async fn upload_user(other_username: &str, hash: String) -> Result<Uuid> {
 #[derive(Debug, Deserialize)]
 pub struct RegistrationPayload {
     username: String,
-    pwd: String,
+    password: String,
 }
