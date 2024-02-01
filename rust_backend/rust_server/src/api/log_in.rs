@@ -27,26 +27,26 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
         Ok(u) => u,
         Err(e) => {
             error!("Failed to get user from username: {}", e);
-            let body = Json(json!({
+            return Ok(Json(json!({
                 "result": {
                     "success": false,
+                    "reason_type": "BAD_USERNAME",
                     "reason": "User not found"
                 }
-            }));
-            return Ok(body);
+            })))
         }
     };
 
     let user_hash = user.password_hash.clone();
 
     if !check_password(&payload.password, &user_hash) {
-        let body = Json(json!({
+        return Ok(Json(json!({
             "result": {
                 "success": false,
+                "reason_type": "BAD_PASSWORD",
                 "reason": "Incorrect password"
             }
-        }));
-        return Ok(body);
+        })))
     }
 
     let token = generate_session_token();
@@ -70,14 +70,12 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
     cookies.add(cookie);
 
     // Create the success body.
-    let body = Json(json!({
+    Ok(Json(json!({
         "result": {
             "success": true,
-            "token": token,
+            "token": token
         }
-    }));
-
-    return Ok(body);
+    })))
 }
 
 pub fn get_session_expiration() -> DateTime<Utc> {

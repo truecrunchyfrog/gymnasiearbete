@@ -98,6 +98,7 @@ pub async fn get_user_from_username(username_query: &str) -> Result<User> {
         .map_err(|_| Error::DatabaseConnectionFail);
     result
 }
+
 #[derive(Clone)]
 pub struct UploadToken {
     pub user_uuid: Uuid,
@@ -146,10 +147,12 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
         .map_err(|err| Error::DatabaseQueryFail)?;
 
     let user = get_user(result).await?;
+
     if user.id == Uuid::nil() {
-        return Ok(None);
+        return Ok(None)
     }
-    return Ok(Some(user));
+
+    Ok(Some(user))
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {

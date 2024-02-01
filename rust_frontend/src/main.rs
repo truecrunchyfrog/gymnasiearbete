@@ -1,11 +1,11 @@
 #[macro_use] extern crate rocket;
 
-use reqwest::{cookie::{CookieStore, Jar}, header::{self, HeaderMap}, Client, RequestBuilder, Url};
+use reqwest::{cookie::Jar, Client, Url};
 use rocket::{
-    form::{validate, Form, Context}, fs::{NamedFile, TempFile}, http::{hyper::request, Cookie, CookieJar, Status}, request::{FromRequest, Outcome}, response::{self, Redirect, Responder, Response}, serde::{json::Json, Serialize, Deserialize}, time::{Duration, OffsetDateTime}
+    form::Form, fs::NamedFile, http::{Cookie, CookieJar, Status}, request::{FromRequest, Outcome}, response::Redirect, serde::{Serialize, Deserialize}
 };
 use rocket_dyn_templates::{context, Template};
-use std::{collections::HashMap, env, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::HashMap, env, path::{Path, PathBuf}};
 use once_cell::sync::Lazy;
 
 #[derive(FromForm, Serialize)]
@@ -97,6 +97,12 @@ fn login(m: Option<&str>, t: Option<u8>) -> Template {
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
+struct ApiResultContainer<Inner> {
+    result: Inner
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "rocket::serde")]
 struct ApiLoginResponse {
     success: bool,
     token: Option<String>,
@@ -109,7 +115,7 @@ async fn do_login(form: Form<UsernamePasswordForm<'_>>, cookies: &CookieJar<'_>)
     .json(&*form)
     .send().await.unwrap();
 
-    let response_json = response.json::<ApiLoginResponse>().await.unwrap();
+    let response_json = response.json::<ApiResultContainer<ApiLoginResponse>>().await.unwrap().result;
 
     if !response_json.success {
         return Redirect::to(uri!(login(m = Some(response_json.reason.unwrap().to_lowercase()), t = Some(1))))
@@ -151,10 +157,10 @@ async fn do_register(form: Form<UsernamePasswordForm<'_>>) -> Redirect {
     .json(&*form)
     .send().await.unwrap();
 
-    let response_json = response.json::<ApiRegisterResponse>().await.unwrap();
+    let response_json = response.json::<ApiResultContainer<ApiRegisterResponse>>().await.unwrap().result;
 
     if !response_json.success {
-        return Redirect::to(uri!(login(m = Some(response_json.reason.unwrap().to_lowercase()), t = Some(1))))
+        return Redirect::to(uri!(register(Some(response_json.reason.unwrap().to_lowercase()))))
     }
 
     Redirect::to(uri!(login(m = Some(
@@ -185,7 +191,7 @@ fn rocket() -> _ {
             login, do_login, already_logged_in,
             do_log_out,
             register, do_register, already_reg_and_logged_in
-            ])
+        ])
         .register("/", catchers![ not_found, internal_error ])
         .attach(Template::fairing())
 }

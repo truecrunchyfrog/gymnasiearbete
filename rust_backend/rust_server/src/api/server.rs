@@ -51,35 +51,33 @@ pub async fn root() -> Result<Json<Value>> {
 
 pub async fn get_user_from_token(headers: HeaderMap) -> Result<User> {
     let token = match get_token(headers).await {
-        Err(_e) => return Err(Error::AuthFailTokenWrongFormat),
         Ok(t) => t,
+        Err(_) => return Err(Error::AuthFailTokenWrongFormat)
     };
 
     match get_token_owner(&token).await {
-        Ok(u) => match u {
-            Some(o) => return Ok(o),
-            None => return Err(Error::InternalServerError),
-        },
+        Ok(Some(u)) => Ok(u),
+        Ok(None) => Err(Error::InternalServerError),
         Err(e) => {
             error!("Failed to get owner of token: {}", e);
-            return Err(Error::InternalServerError);
+            Err(Error::InternalServerError)
         }
-    };
+    }
 }
 
 pub async fn get_user_info(ctx: Ctx) -> Result<Json<User>> {
     let user = crate::database::connection::get_user(ctx.user_id()).await?;
-    return Ok(Json(user));
+    Ok(Json(user))
 }
 
 async fn get_token(headers: axum::http::HeaderMap) -> Result<String> {
     match headers.get(AUTHORIZATION) {
         Some(value) => match value.to_str() {
-            Ok(o) => return Ok(o.to_string()),
-            Err(_e) => return Err(Error::AuthFailTokenWrongFormat),
-        },
-        None => return Err(Error::LoginFail),
-    };
+            Ok(o) => Ok(o.to_string()),
+            Err(_e) => Err(Error::AuthFailTokenWrongFormat),
+        }
+        None => Err(Error::LoginFail)
+    }
 }
 
 // retrieve all files from user
@@ -101,5 +99,5 @@ pub async fn get_user_files(ctx: Ctx) -> Result<Json<Vec<Value>>> {
 }
 
 pub async fn get_server_status(headers: HeaderMap) -> Result<Json<ServerStatus>> {
-    return Ok(Json(ServerStatus::new().await));
+    Ok(Json(ServerStatus::new().await))
 }
