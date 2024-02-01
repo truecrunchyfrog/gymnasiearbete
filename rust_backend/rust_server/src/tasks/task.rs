@@ -64,16 +64,17 @@ impl Task for ExampleTask {
 }
 
 impl ExampleTask {
-    pub fn new(tm: &Arc<Mutex<TaskManager>>) {
+    pub fn new(tm: &Arc<Mutex<TaskManager>>) -> Self {
         let t = Box::new(Self {});
-        let mut tm = match tm.lock() {
-            Ok(o) => o,
+        match tm.lock() {
+            Ok(mut o) => o.add_task(t),
             Err(e) => {
                 error!("Failed to lock task manager: {}", e);
-                return;
+                panic!("Failed to lock task manager");
             }
         };
-        tm.add_task(t);
+
+        Self {}
     }
 }
 
@@ -91,16 +92,16 @@ impl Task for BuildImageTask {
 }
 
 impl BuildImageTask {
-    pub fn new(tm: &Arc<Mutex<TaskManager>>, file_id: Uuid) {
+    pub fn new(tm: &Arc<Mutex<TaskManager>>, file_id: Uuid) -> Self {
         let t = Box::new(Self { file_id });
-        let mut tm = match tm.lock() {
-            Ok(o) => o,
+        match tm.lock() {
+            Ok(mut o) => o.add_task(t),
             Err(e) => {
                 error!("Failed to lock task manager: {}", e);
-                return;
+                panic!("Failed to lock task manager");
             }
         };
-        tm.add_task(t);
+        Self { file_id }
     }
 }
 

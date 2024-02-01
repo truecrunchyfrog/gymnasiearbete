@@ -30,7 +30,7 @@ async fn start_container(
 
 async fn create_container(
     docker: &Docker,
-    preset: impl ContainerPreset,
+    preset: impl ContainerPreset + Send,
 ) -> Result<String, bollard::errors::Error> {
     info!("Creating container");
 

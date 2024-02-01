@@ -92,11 +92,10 @@ pub async fn get_user_from_username(username_query: &str) -> Result<User> {
     use crate::schema::users::dsl::{username, users};
     let mut conn = establish_connection();
 
-    let result = users
+    users
         .filter(username.eq(username_query))
         .first::<User>(&mut conn)
-        .map_err(|_| Error::DatabaseConnectionFail);
-    result
+        .map_err(|_| Error::DatabaseConnectionFail)
 }
 #[derive(Clone)]
 pub struct UploadToken {
@@ -127,11 +126,10 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
     use crate::schema::users::dsl::{id, users};
     let mut conn = establish_connection();
 
-    let result = users
+    users
         .filter(id.eq(user_id))
         .first::<User>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail);
-    result
+        .map_err(|err| Error::DatabaseQueryFail)
 }
 
 // Get the user from the token, return a Result containing a Some(User) if the token is valid, None otherwise.
@@ -149,18 +147,16 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
     if user.id == Uuid::nil() {
         return Ok(None);
     }
-    return Ok(Some(user));
+    Ok(Some(user))
 }
 
 pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
     use crate::schema::files::dsl::{files, id, owner_uuid};
     let mut conn = establish_connection();
 
-    let file_ids = files
+    files
         .filter(owner_uuid.eq(user_id))
         .select(id)
         .load::<Uuid>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail);
-
-    file_ids
+        .map_err(|err| Error::DatabaseQueryFail)
 }

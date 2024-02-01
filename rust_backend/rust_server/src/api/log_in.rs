@@ -78,13 +78,12 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
         }
     }));
 
-    return Ok(body);
+    Ok(body)
 }
 
 pub fn get_session_expiration() -> DateTime<Utc> {
     let now = Utc::now();
-    let in_one_week = now + Duration::days(7);
-    return in_one_week;
+    now + Duration::days(7)
 }
 
 pub fn generate_session_token() -> String {

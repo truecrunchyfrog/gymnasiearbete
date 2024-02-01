@@ -7,7 +7,7 @@ use derived::Constdef;
 use futures::future::Lazy;
 use std::default;
 
-pub trait ContainerPreset {
+pub trait ContainerPreset: Send + Sync {
     fn name(&self) -> &str;
     fn start_stdin(&self) -> &str;
     fn host_config(&self) -> HostConfig;

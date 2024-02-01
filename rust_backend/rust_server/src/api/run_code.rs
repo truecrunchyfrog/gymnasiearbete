@@ -44,13 +44,12 @@ pub async fn run_hello_world() -> Result<String> {
 }
 
 async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
-    match headers.get("file_id") {
-        Some(value) => match value.to_str() {
-            Ok(o) => return Ok(o.to_string()),
-            Err(_e) => return Err(Error::FileNotFound),
-        },
-        None => return Err(Error::FileNotFound),
-    };
+    headers
+        .get("file_id")
+        .map_or(Err(Error::FileNotFound), |value| match value.to_str() {
+            Ok(o) => Ok(o.to_string()),
+            Err(_e) => Err(Error::FileNotFound),
+        })
 }
 
 #[derive(Deserialize)]

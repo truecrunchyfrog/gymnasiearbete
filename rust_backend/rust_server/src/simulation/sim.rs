@@ -14,7 +14,7 @@ pub trait GameLogic {
 
 impl PingPong {
     pub fn new(player: i32) -> Self {
-        PingPong {
+        Self {
             game_bin_path: "./rust_server/demo_code/program.o".to_string(),
             player_bin: player,
         }
@@ -97,6 +97,6 @@ impl GameLogic for PingPong {
     }
 }
 
-pub fn start_game<T: GameLogic>(game: &mut T) {
+pub fn start_game<T: GameLogic>(game: &T) {
     T::start(game);
 }

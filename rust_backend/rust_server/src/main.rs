@@ -56,7 +56,7 @@ async fn startup_checks() -> Result<()> {
     info!("Initializing");
 
     let mut game = simulation::sim::PingPong::new(1);
-    simulation::sim::start_game(&mut game);
+    simulation::sim::start_game(&game);
 
     #[cfg(not(unix))]
     {

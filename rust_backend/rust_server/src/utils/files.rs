@@ -13,7 +13,7 @@ pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
 pub fn create_file(file_name: &str, file_path: &str, language: &str, user_id: Uuid) -> NewFile {
     let file_content = fs::read(file_path).expect("Failed to read file");
     let file_size = fs::read(file_path).expect("Failed to read file").len();
-    let file = NewFile {
+    NewFile {
         file_size: file_size as i32,
 
         file_content: Some(file_content),
@@ -22,6 +22,5 @@ pub fn create_file(file_name: &str, file_path: &str, language: &str, user_id: Uu
         created_at: Some(Utc::now().naive_utc()),
         last_modified_at: Some(Utc::now().naive_utc()),
         parent_id: None,
-    };
-    return file;
+    }
 }
