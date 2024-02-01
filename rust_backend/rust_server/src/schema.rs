@@ -2,25 +2,21 @@
 
 pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "buildstatus"))]
-    pub struct Buildstatus;
+    #[diesel(postgres_type(name = "simulation_result"))]
+    pub struct SimulationResult;
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::Buildstatus;
-
     files (id) {
         id -> Uuid,
-        #[max_length = 255]
-        filename -> Varchar,
-        #[max_length = 255]
-        programming_language -> Varchar,
-        filesize -> Int4,
-        lastchanges -> Timestamp,
+        file_size -> Int4,
         file_content -> Nullable<Bytea>,
         owner_uuid -> Uuid,
-        build_status -> Buildstatus,
+        #[max_length = 255]
+        file_type -> Nullable<Varchar>,
+        created_at -> Nullable<Timestamptz>,
+        last_modified_at -> Nullable<Timestamptz>,
+        parent_id -> Nullable<Uuid>,
     }
 }
 
@@ -36,22 +32,42 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SimulationResult;
+
+    simulations (simulation_id) {
+        simulation_id -> Int4,
+        ran_at -> Timestamp,
+        ran_file_id -> Uuid,
+        logs -> Nullable<Text>,
+        result -> Nullable<SimulationResult>,
+        time_taken -> Nullable<Interval>,
+        cpu_time -> Nullable<Interval>,
+        max_memory_usage -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         #[max_length = 255]
         username -> Varchar,
         #[max_length = 255]
         password_hash -> Varchar,
-        #[max_length = 255]
-        salt -> Varchar,
+        created_at -> Nullable<Timestamptz>,
+        last_login_at -> Nullable<Timestamptz>,
+        login_count -> Nullable<Int4>,
+        is_admin -> Nullable<Bool>,
     }
 }
 
 diesel::joinable!(files -> users (owner_uuid));
 diesel::joinable!(session_tokens -> users (user_uuid));
+diesel::joinable!(simulations -> files (ran_file_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     files,
     session_tokens,
+    simulations,
     users,
 );

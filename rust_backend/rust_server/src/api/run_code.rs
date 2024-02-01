@@ -1,58 +1,49 @@
-use axum::http::StatusCode;
+use std::io::Write;
+
+use crate::{docker::profiles::HELLO_WORLD_PRESET, Result};
+use axum::{
+    debug_handler,
+    extract::{self, Multipart},
+    http::StatusCode,
+    Json,
+};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tempfile::{tempfile, NamedTempFile};
+use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::{
-    docker::docker_api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
+    ctx::Ctx, docker::api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
     Error,
 };
 
-use super::get_user_from_token;
-
-async fn check_authentication(headers: axum::http::HeaderMap) -> bool {
-    let user = match get_user_from_token(headers.clone()).await {
-        Ok(u) => u,
-        Err(_) => return false,
-    };
-    let file_id = match get_file_from_header(headers).await {
-        Ok(o) => o,
-        Err(_) => return false,
-    };
-
-    let user_files = match crate::database::connection::get_files_from_user(user.id).await {
-        Ok(o) => o,
-        Err(_) => return false,
-    };
-
-    // check if file is owned by user
-    let file_uuid = Uuid::parse_str(&file_id);
-    let file_uuid = match file_uuid {
-        Ok(o) => o,
-        Err(_) => return false,
-    };
-    if !user_files.contains(&file_uuid) {
-        return false;
-    }
-    return true;
+pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
+    let logs = run_hello_world().await?;
+    let body = json!({
+        "status":"success",
+        "logs": logs,
+    });
+    Ok(axum::Json(body))
 }
 
-pub async fn run_user_code(headers: axum::http::HeaderMap) -> StatusCode {
-    // Change this to check if the user has access to the file
-    info!("Running user code");
-    if check_authentication(headers.clone()).await {
-        return StatusCode::UNAUTHORIZED;
-    }
-    info!("Authenticated Successfully");
-    // run example
-    match configure_and_run_secure_container().await {
-        Ok(_) => return StatusCode::OK,
+pub async fn run_user_bin(file: NamedTempFile, input: String) -> Result<String> {
+    todo!()
+}
+
+pub async fn run_hello_world() -> Result<String> {
+    let preset = HELLO_WORLD_PRESET;
+    let output = match configure_and_run_secure_container(preset).await {
+        Ok(o) => o,
         Err(e) => {
-            error!("Failed to run container: {:?}", e);
-            return StatusCode::EXPECTATION_FAILED;
+            error!("Failed to run container: {}", e);
+            return Err(Error::InternalServerError);
         }
-    }
+    };
+    Ok(output.logs)
 }
 
-async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String, Error> {
+async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
     match headers.get("file_id") {
         Some(value) => match value.to_str() {
             Ok(o) => return Ok(o.to_string()),
@@ -60,4 +51,64 @@ async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String, 
         },
         None => return Err(Error::FileNotFound),
     };
+}
+
+#[derive(Deserialize)]
+pub struct BuildInfo {
+    file_id: String,
+}
+
+#[debug_handler]
+pub async fn build_file(ctx: Ctx, payload: Json<BuildInfo>) -> Result<Json<Value>> {
+    let file_id = payload.file_id.clone();
+    let body = json!({
+        "status":"success",
+        "file_id": file_id,
+    });
+    Ok(axum::Json(body))
+}
+
+async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
+    let mut tmp_file = tempfile().map_err(|e| {
+        error!("Failed to create tempfile: {}", e);
+        Error::InternalServerError
+    })?;
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let name = field.name().ok_or(Error::InternalServerError)?.to_string();
+        let data = match field.bytes().await {
+            Ok(o) => o,
+            Err(e) => {
+                error!("Failed to read bytes: {}", e);
+                return Err(Error::InternalServerError);
+            }
+        };
+
+        println!("Length of `{}` is {} bytes", name, data.len());
+
+        // Create a tempfile object from bytes
+        match tmp_file.write_all(&data) {
+            Ok(()) => {}
+            Err(e) => {
+                error!("Failed to write to tempfile: {}", e);
+                return Err(Error::InternalServerError);
+            }
+        };
+    }
+    todo!();
+    /*
+    gcc_container(tmp_file.into()).await.map_err(|e| {
+        error!("Failed to build file: {}", e);
+        Error::InternalServerError
+    })?;
+
+    let json = Json(json!({
+        "message": "Successfully uploaded file"
+    }));
+    Ok(json)
+    */
+}
+
+pub async fn setup_game_container(program: NamedTempFile) -> Result<String> {
+    todo!()
 }
