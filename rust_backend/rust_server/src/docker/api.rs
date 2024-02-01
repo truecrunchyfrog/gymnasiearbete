@@ -1,4 +1,6 @@
 use bollard::exec::CreateExecOptions;
+use bollard::service::{Mount, MountVolumeOptions};
+use std::collections::HashMap;
 use std::io::Read;
 use tokio::io::AsyncReadExt;
 
@@ -15,6 +17,8 @@ use crate::docker::profiles::ContainerPreset;
 use crate::docker::profiles::HelloWorldPreset;
 
 use super::profiles::HELLO_WORLD_PRESET;
+use maplit::hashmap;
+use tempdir::TempDir;
 
 async fn start_container(
     docker: &Docker,
@@ -162,10 +166,56 @@ async fn get_file_from_container(
     Ok(bytes)
 }
 
-pub async fn gcc_container(source_file: File) -> Result<(), anyhow::Error> {
-    todo!();
+pub async fn gcc_container(
+    source_file: &mut File,
+    preset: impl ContainerPreset + std::marker::Copy,
+) -> Result<File, anyhow::Error> {
+    // Gcc container docs: docker run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp gcc:4.9 gcc -o myapp myapp.c
+    // Connect to the local Docker daemon
+    let docker = Docker::connect_with_local_defaults()?;
+    remove_old_container(&docker, preset.name()).await?;
+    let mut updated_preset = preset.clone();
+    // Create a tempdir to store the source file
+    let temp_dir = TempDir::new("gcc_container")?;
+    // Write file into tempdir
+    let mut file = File::create(temp_dir.path().join("program.c")).await?;
+    tokio::io::copy(source_file, &mut file).await?;
+    // Create a volume mount
+    // Docs: Option<HashMap<T, HashMap<(), ()>>>
+    // An object mapping mount point paths inside the container to empty objects.
+    let volume: Option<HashMap<String, HashMap<(), ()>>> = Some(hashmap! {
+        // Inner
+        "/app".to_string() => hashmap! {},
+        // Outer
+        format!("{}",&temp_dir.path().to_string_lossy()) => hashmap! {},
+    });
 
-    Ok(())
+    updated_preset.container_config().volumes = volume;
+    let container_id = create_container(&docker, updated_preset).await?;
+
+    start_container(&docker, &container_id).await?;
+    send_stdin_to_container(&docker, &container_id, updated_preset.start_stdin()).await?;
+    let container_logs = pull_logs(&docker, &container_id, updated_preset).await?;
+
+    stop_container(&docker, &container_id).await?;
+
+    // Check if it compiled successfully by checking if the binary exists named program inside the tempdir
+    let binary_path = temp_dir.path().join("program");
+    let binary_exists = tokio::fs::metadata(&binary_path).await.is_ok();
+    if !binary_exists {
+        return Err(anyhow::anyhow!("Failed to compile"));
+    }
+    info!("Binary exists: {}", binary_exists);
+
+    //remove_container(&docker, &container_id).await?;
+    let output = ContainerOutput {
+        logs: container_logs,
+        id: container_id.parse::<i32>()?,
+        exit_code: 0,
+    };
+    // Return the binary file
+    let mut binary_file = File::open(binary_path).await?;
+    Ok(binary_file)
 }
 
 pub async fn send_stdin_to_container(
@@ -177,7 +227,6 @@ pub async fn send_stdin_to_container(
         cmd: Some(vec![stdin.to_string()]),
         ..Default::default()
     };
-    docker.create_exec(container_id, config).await?;
 
     Ok(())
 }

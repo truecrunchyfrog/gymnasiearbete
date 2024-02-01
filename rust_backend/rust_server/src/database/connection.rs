@@ -160,3 +160,13 @@ pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
         .load::<Uuid>(&mut conn)
         .map_err(|err| Error::DatabaseQueryFail)
 }
+
+pub async fn get_file_from_id(file_id: Uuid) -> Result<InsertedFile> {
+    use crate::schema::files::dsl::{files, id};
+    let mut conn = establish_connection();
+
+    files
+        .filter(id.eq(file_id))
+        .first::<InsertedFile>(&mut conn)
+        .map_err(|err| Error::DatabaseQueryFail)
+}

@@ -1,6 +1,13 @@
 use std::io::Write;
 
-use crate::{docker::profiles::HELLO_WORLD_PRESET, Result};
+use crate::{
+    database::connection::get_file_from_id,
+    docker::{
+        api::gcc_container,
+        profiles::{COMPILER_PRESET, HELLO_WORLD_PRESET},
+    },
+    Result,
+};
 use axum::{
     debug_handler,
     extract::{self, Multipart},
@@ -27,7 +34,7 @@ pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
     Ok(axum::Json(body))
 }
 
-pub async fn run_user_bin(file: NamedTempFile, input: String) -> Result<String> {
+pub async fn run_user_bin(target: &std::fs::File, input: String) -> Result<String> {
     todo!()
 }
 
@@ -41,15 +48,6 @@ pub async fn run_hello_world() -> Result<String> {
         }
     };
     Ok(output.logs)
-}
-
-async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
-    headers
-        .get("file_id")
-        .map_or(Err(Error::FileNotFound), |value| match value.to_str() {
-            Ok(o) => Ok(o.to_string()),
-            Err(_e) => Err(Error::FileNotFound),
-        })
 }
 
 #[derive(Deserialize)]
@@ -94,9 +92,11 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
             }
         };
     }
-    todo!();
-    /*
-    gcc_container(tmp_file.into()).await.map_err(|e| {
+
+    let preset = COMPILER_PRESET;
+    let mut tokio_file = tokio::fs::File::from_std(tmp_file);
+
+    let bin = gcc_container(&mut tokio_file, preset).await.map_err(|e| {
         error!("Failed to build file: {}", e);
         Error::InternalServerError
     })?;
@@ -105,9 +105,36 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
         "message": "Successfully uploaded file"
     }));
     Ok(json)
-    */
 }
 
 pub async fn setup_game_container(program: NamedTempFile) -> Result<String> {
     todo!()
+}
+
+#[derive(Deserialize)]
+pub struct TargetFile {
+    id: Uuid,
+}
+
+pub async fn run_file_from_id(ctx: Ctx, target: Json<TargetFile>) -> Result<Json<Value>> {
+    // Get file from database
+    let file = match get_file_from_id(target.id).await {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Failed to get file from database: {}", e);
+            return Err(Error::InternalServerError);
+        }
+    };
+
+    // Load bytes into tempfile
+    let mut tmp_file = tempfile().map_err(|e| {
+        error!("Failed to create tempfile: {}", e);
+        Error::InternalServerError
+    })?;
+
+    let body = json!({
+        "status":"success",
+        "file_id": target.id,
+    });
+    Ok(axum::Json(body))
 }

@@ -86,7 +86,7 @@ impl GameLogic for PingPong {
                 return;
             }
         };
-        let output = match run_user_bin(user_file, output).await {
+        let output = match run_user_bin(user_file.as_file(), output).await {
             Ok(o) => o,
             Err(e) => {
                 println!("Failed to start user container: {}", e);

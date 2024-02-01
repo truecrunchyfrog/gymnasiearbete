@@ -18,6 +18,7 @@ pub trait ContainerPreset: Send + Sync {
 }
 
 pub const HELLO_WORLD_PRESET: HelloWorldPreset = HelloWorldPreset;
+pub const COMPILER_PRESET: CompilerPreset = CompilerPreset;
 
 #[derive(Clone, Copy)]
 pub struct HelloWorldPreset;
@@ -59,6 +60,60 @@ impl ContainerPreset for HelloWorldPreset {
     fn create_options(&self) -> CreateContainerOptions<String> {
         CreateContainerOptions {
             name: "hello-world".to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn start_stdin(&self) -> &str {
+        ""
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CompilerPreset;
+impl ContainerPreset for CompilerPreset {
+    fn name(&self) -> &str {
+        "compiler"
+    }
+
+    fn host_config(&self) -> HostConfig {
+        HostConfig {
+            auto_remove: Some(true),
+            ..Default::default()
+        }
+    }
+
+    fn container_config(&self) -> Config<String> {
+        Config {
+            image: Some("gcc".to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn logs_options(&self) -> LogsOptions<String> {
+        LogsOptions {
+            follow: true,
+            stdout: true,
+            stderr: true,
+            ..Default::default()
+        }
+    }
+
+    fn exec_options(&self) -> CreateExecOptions<String> {
+        CreateExecOptions {
+            cmd: Some(vec![
+                "gcc".to_string(),
+                "program.c".to_string(),
+                "-o".to_string(),
+                "program".to_string(),
+            ]),
+            ..Default::default()
+        }
+    }
+
+    fn create_options(&self) -> CreateContainerOptions<String> {
+        CreateContainerOptions {
+            name: "Compiler".to_string(),
             ..Default::default()
         }
     }
