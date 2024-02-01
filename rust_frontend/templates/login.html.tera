@@ -4,12 +4,11 @@
 
 {% block content %}
 
-{% if err_msg %}
-<div class="ui negative message">{{ err_msg }}</div>
-{% endif %}
-
-{% if succ_msg %}
-<div class="ui positive message">{{ succ_msg }}</div>
+{% if msg %}
+<div class="ui {% if kind == 0 %}positive{% elif kind == 1 %}negative{% endif %} message">
+    <i class="info icon"></i>
+    {{ msg }}
+</div>
 {% endif %}
 
 <h1>welcome back to σ<span id="display-name"></span></h1>
