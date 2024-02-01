@@ -12,7 +12,9 @@ use tokio::fs::File;
 use crate::schema::files::id;
 
 use crate::docker::profiles::ContainerPreset;
-use crate::docker::profiles::EXAMPLE_PROFILE;
+use crate::docker::profiles::HelloWorldPreset;
+
+use super::profiles::HELLO_WORLD_PRESET;
 
 async fn start_container(
     docker: &Docker,
@@ -26,16 +28,14 @@ async fn start_container(
     Ok(())
 }
 
-async fn create_container<'a>(
+async fn create_container(
     docker: &Docker,
-    preset: &ContainerPreset,
+    preset: impl ContainerPreset,
 ) -> Result<String, bollard::errors::Error> {
     info!("Creating container");
 
-    let container = docker.create_container(
-        Some(preset.create_options.clone()),
-        preset.container_config.clone(),
-    );
+    let container =
+        docker.create_container(Some(preset.create_options()), preset.container_config());
     let container_id = match container.await {
         Ok(o) => o.id,
         Err(e) => return Err(e),
@@ -59,10 +59,10 @@ async fn remove_old_container(
 async fn pull_logs(
     docker: &Docker,
     container_id: &str,
-    preset: &ContainerPreset,
+    preset: impl ContainerPreset,
 ) -> Result<String, bollard::errors::Error> {
     // Pull logs until the container stops
-    let mut logs_stream = docker.logs(container_id, Some(preset.logs_options.clone()));
+    let mut logs_stream = docker.logs(container_id, Some(preset.logs_options()));
     let mut logs = String::new();
     while let Some(log) = logs_stream.try_next().await? {
         logs.push_str(&log.to_string());
@@ -117,13 +117,13 @@ async fn remove_container(
 pub async fn hello_world_container_test() -> Result<(), bollard::errors::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
-    let preset = EXAMPLE_PROFILE;
+    let preset = HELLO_WORLD_PRESET;
 
     remove_old_container(&docker, "hello-world").await?;
 
-    let container_id = create_container(&docker, &preset).await?;
+    let container_id = create_container(&docker, preset).await?;
     start_container(&docker, &container_id).await?;
-    pull_logs(&docker, &container_id, &preset).await?;
+    pull_logs(&docker, &container_id, preset).await?;
 
     stop_container(&docker, &container_id).await?;
     remove_container(&docker, &container_id).await?;
@@ -183,24 +183,23 @@ pub async fn send_stdin_to_container(
 }
 
 pub async fn configure_and_run_secure_container(
-    input: String,
-    preset: ContainerPreset,
+    preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<ContainerOutput, anyhow::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
 
     let test_file_path = "./rust_server/demo_code/program.o";
 
-    remove_old_container(&docker, &preset.name).await?;
+    remove_old_container(&docker, preset.name()).await?;
 
-    let container_id = create_container(&docker, &preset).await?;
+    let container_id = create_container(&docker, preset).await?;
     // Create app folder in container
     // run_command_in_container(&docker, &container_id, "mkdir /app").await?;
 
     copy_file_into_container(&docker, &container_id, test_file_path, "/").await?;
     start_container(&docker, &container_id).await?;
-    send_stdin_to_container(&docker, &container_id, &input).await?;
-    let container_logs = pull_logs(&docker, &container_id, &preset).await?;
+    send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
+    let container_logs = pull_logs(&docker, &container_id, preset).await?;
 
     stop_container(&docker, &container_id).await?;
     //remove_container(&docker, &container_id).await?;
@@ -230,7 +229,7 @@ pub struct ContainerOutput {
 
 pub async fn start_game_container(
     program: NamedTempFile,
-    preset: ContainerPreset,
+    preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<ContainerOutput, anyhow::Error> {
     let docker = Docker::connect_with_local_defaults()?;
 
@@ -239,13 +238,13 @@ pub async fn start_game_container(
         None => return Err(anyhow::anyhow!("Failed to get path")),
     };
 
-    remove_old_container(&docker, &preset.name).await?;
+    remove_old_container(&docker, preset.name()).await?;
 
-    let container_id = create_container(&docker, &preset).await?;
+    let container_id = create_container(&docker, preset).await?;
 
     copy_file_into_container(&docker, &container_id, program_path, "/").await?;
     start_container(&docker, &container_id).await?;
-    let logs = pull_logs(&docker, &container_id, &preset).await?;
+    let logs = pull_logs(&docker, &container_id, preset).await?;
     let output: ContainerOutput = ContainerOutput {
         logs,
         id: container_id.parse::<i32>()?,

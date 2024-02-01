@@ -21,7 +21,10 @@ pub fn establish_connection() -> PgConnection {
     let mut conn = PgConnection::establish(&database_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
     if cfg!(test) {
-        conn.begin_test_transaction().unwrap();
+        match conn.begin_test_transaction() {
+            Ok(_) => info!("Test transaction started"),
+            Err(err) => error!("Error starting test transaction: {}", err),
+        }
     }
     conn
 }

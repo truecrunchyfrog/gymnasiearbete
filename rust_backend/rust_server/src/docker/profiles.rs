@@ -7,27 +7,63 @@ use derived::Constdef;
 use futures::future::Lazy;
 use std::default;
 
-#[derive(Clone, Constdef)]
-pub struct ContainerPreset {
-    pub name: &'static str,
-    pub host_config: HostConfig,
-    pub container_config: Config<String>,
-    pub logs_options: LogsOptions<String>,
-    pub exec_options: CreateExecOptions<String>,
-    pub create_options: CreateContainerOptions<String>,
+pub trait ContainerPreset {
+    fn name(&self) -> &str;
+    fn start_stdin(&self) -> &str;
+    fn host_config(&self) -> HostConfig;
+    fn container_config(&self) -> Config<String>;
+    fn logs_options(&self) -> LogsOptions<String>;
+    fn exec_options(&self) -> CreateExecOptions<String>;
+    fn create_options(&self) -> CreateContainerOptions<String>;
 }
 
-impl Default for ContainerPreset {
-    fn default() -> Self {
-        Self {
-            name: "example".to_string(),
-            host_config: Default::default(),
-            container_config: Default::default(),
-            logs_options: Default::default(),
-            exec_options: Default::default(),
-            create_options: Default::default(),
+pub const HELLO_WORLD_PRESET: HelloWorldPreset = HelloWorldPreset;
+
+#[derive(Clone, Copy)]
+pub struct HelloWorldPreset;
+impl ContainerPreset for HelloWorldPreset {
+    fn name(&self) -> &str {
+        "hello-world"
+    }
+
+    fn host_config(&self) -> HostConfig {
+        HostConfig {
+            auto_remove: Some(true),
+            ..Default::default()
         }
     }
-}
 
-pub const EXAMPLE_PROFILE: ContainerPreset = ContainerPreset::default();
+    fn container_config(&self) -> Config<String> {
+        Config {
+            image: Some("hello-world".to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn logs_options(&self) -> LogsOptions<String> {
+        LogsOptions {
+            follow: true,
+            stdout: true,
+            stderr: true,
+            ..Default::default()
+        }
+    }
+
+    fn exec_options(&self) -> CreateExecOptions<String> {
+        CreateExecOptions {
+            cmd: Some(vec!["echo".to_string(), "hello world".to_string()]),
+            ..Default::default()
+        }
+    }
+
+    fn create_options(&self) -> CreateContainerOptions<String> {
+        CreateContainerOptions {
+            name: "hello-world".to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn start_stdin(&self) -> &str {
+        ""
+    }
+}

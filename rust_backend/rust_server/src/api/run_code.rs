@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::{docker::profiles::EXAMPLE_PROFILE, Result};
+use crate::{docker::profiles::HELLO_WORLD_PRESET, Result};
 use axum::{
     debug_handler,
     extract::{self, Multipart},
@@ -19,11 +19,28 @@ use crate::{
 };
 
 pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
-    todo!()
+    let logs = run_hello_world().await?;
+    let body = json!({
+        "status":"success",
+        "logs": logs,
+    });
+    Ok(axum::Json(body))
 }
 
 pub async fn run_user_bin(file: NamedTempFile, input: String) -> Result<String> {
     todo!()
+}
+
+pub async fn run_hello_world() -> Result<String> {
+    let preset = HELLO_WORLD_PRESET;
+    let output = match configure_and_run_secure_container(preset).await {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Failed to run container: {}", e);
+            return Err(Error::InternalServerError);
+        }
+    };
+    Ok(output.logs)
 }
 
 async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
