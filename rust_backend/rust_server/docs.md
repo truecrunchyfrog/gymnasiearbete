@@ -36,7 +36,8 @@ Upon successful authentication, the API returns a JSON object indicating success
 ```json
 {
   "result": {
-    "success": true
+    "success": true,
+    "token": "..."
   }
 }
 ```
@@ -49,7 +50,20 @@ If the provided password does not match the stored password hash for the given u
 {
   "result": {
     "success": false,
+    "reason_type": "BAD_PASSWORD",
     "reason": "Incorrect password"
+  }
+}
+```
+
+#### Unknown username
+
+```json
+{
+  "result": {
+    "success": false,
+    "reason_type": "BAD_USERNAME",
+    "reason": "User not found"
   }
 }
 ```
@@ -97,7 +111,8 @@ curl -X POST \
 ```json
 {
   "result": {
-    "success": true
+    "success": true,
+    "token": "..."
   }
 }
 ```
