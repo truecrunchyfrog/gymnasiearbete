@@ -58,22 +58,16 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
     };
     upload_session_token(session_token.clone()).await;
 
-    let mut cookie = Cookie::new(
-        crate::api::authentication::AUTH_TOKEN,
-        create_cookie(session_token),
-    );
+    let cookie = create_cookie(session_token);
 
     info!("Created cookie: {}", &cookie);
-
-    cookie.set_http_only(true);
-    cookie.set_path("/");
-    cookies.add(cookie);
 
     // Create the success body.
     Ok(Json(json!({
         "result": {
             "success": true,
-            "token": token
+            "token": token,
+            "cookie": cookie
         }
     })))
 }

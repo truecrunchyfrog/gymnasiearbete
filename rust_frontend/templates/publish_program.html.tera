@@ -1,0 +1,20 @@
+{% extends "base" %}
+
+{% block title %}publish a program{% endblock %}
+
+{% block content %}
+
+{% if err_msg %}
+<div class="ui negative message">{{ err_msg }}</div>
+{% endif %}
+
+<h1>publish a program</h1>
+
+<form action="/publish-program" method="post">
+    <div class="ui input">
+        <input type="file" name="file" accept="application/octet-stream">
+    </div>
+    <input type="submit" class="ui primary button" value="publish">
+</form>
+
+{% endblock %}
