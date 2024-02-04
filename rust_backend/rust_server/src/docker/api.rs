@@ -1,20 +1,22 @@
 use bollard::exec::CreateExecOptions;
+use bollard::image::{BuildImageOptions, CreateImageOptions};
 use bollard::service::{Mount, MountVolumeOptions};
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Write};
 use tokio::io::AsyncReadExt;
+use tokio_stream::StreamExt;
 
+use crate::docker::build_image::{self, build_image_from_preset};
+use crate::schema::files::id;
 use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
 use bollard::container::{DownloadFromContainerOptions, UploadToContainerOptions};
 use bollard::Docker;
-use futures::{StreamExt, TryStreamExt};
 use tempfile::{tempfile, NamedTempFile};
 use tokio::fs::File;
+use tokio_stream::wrappers::ReadDirStream;
 
-use crate::schema::files::id;
-
-use crate::docker::profiles::ContainerPreset;
 use crate::docker::profiles::HelloWorldPreset;
+use crate::docker::profiles::{ContainerPreset, COMPILER_PRESET};
 
 use super::profiles::HELLO_WORLD_PRESET;
 use maplit::hashmap;
@@ -157,12 +159,11 @@ async fn get_file_from_container(
     let options = Some(DownloadFromContainerOptions { path: file_path });
     let stream = docker.download_from_container(container_id, options);
     // Use try_fold to accumulate the bytes into a Vec<u8>
-    let bytes = stream
-        .try_fold(Vec::new(), |mut acc, bytes| async move {
-            acc.extend(bytes);
-            Ok(acc)
-        })
-        .await?;
+    let bytes = futures::TryStreamExt::try_fold(stream, Vec::new(), |mut acc, chunk| async move {
+        acc.extend_from_slice(&chunk);
+        Ok(acc)
+    })
+    .await?;
     Ok(bytes)
 }
 
@@ -170,19 +171,32 @@ pub async fn gcc_container(
     source_file: &mut File,
     preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<File, anyhow::Error> {
-    // Gcc container docs: docker run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp gcc:4.9 gcc -o myapp myapp.c
-    // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
-    remove_old_container(&docker, preset.name()).await?;
+
+    build_image_from_preset(preset).await?;
+
+    // Check if image exists
+    let image = docker.inspect_image(preset.name()).await;
+    if image.is_err() {
+        return Err(anyhow::anyhow!("Failed to build image"));
+    }
+
+    info!("Image exists: {}", image.is_ok());
+
+    remove_old_container(&docker, preset.name())
+        .await
+        .expect("Failed to remove old container");
     let mut updated_preset = preset.clone();
     // Create a tempdir to store the source file
-    let temp_dir = TempDir::new("gcc_container")?;
+    let temp_dir = TempDir::new("gcc_container").expect("Failed to create tempdir");
     // Write file into tempdir
-    let mut file = File::create(temp_dir.path().join("program.c")).await?;
-    tokio::io::copy(source_file, &mut file).await?;
-    // Create a volume mount
-    // Docs: Option<HashMap<T, HashMap<(), ()>>>
-    // An object mapping mount point paths inside the container to empty objects.
+    let mut file = File::create(temp_dir.path().join("program.c"))
+        .await
+        .expect("Failed to create file");
+    tokio::io::copy(source_file, &mut file)
+        .await
+        .expect("Failed to copy file");
+
     let volume: Option<HashMap<String, HashMap<(), ()>>> = Some(hashmap! {
         // Inner
         "/app".to_string() => hashmap! {},
@@ -191,31 +205,45 @@ pub async fn gcc_container(
     });
 
     updated_preset.container_config().volumes = volume;
-    let container_id = create_container(&docker, updated_preset).await?;
 
-    start_container(&docker, &container_id).await?;
-    send_stdin_to_container(&docker, &container_id, updated_preset.start_stdin()).await?;
-    let container_logs = pull_logs(&docker, &container_id, updated_preset).await?;
+    let container_id = create_container(&docker, updated_preset)
+        .await
+        .expect("Failed to create container");
+
+    copy_file_into_container(
+        &docker,
+        &container_id,
+        temp_dir.path().to_str().unwrap(),
+        "/",
+    )
+    .await?;
+
+    start_container(&docker, &container_id)
+        .await
+        .expect("Failed to start container");
+
+    let container_logs = pull_logs(&docker, &container_id, updated_preset)
+        .await
+        .expect("Failed to pull logs");
+
+    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/app/program.o")
+        .await
+        .expect("Failed to get file from container");
 
     stop_container(&docker, &container_id).await?;
 
-    // Check if it compiled successfully by checking if the binary exists named program inside the tempdir
-    let binary_path = temp_dir.path().join("program");
-    let binary_exists = tokio::fs::metadata(&binary_path).await.is_ok();
-    if !binary_exists {
-        return Err(anyhow::anyhow!("Failed to compile"));
-    }
-    info!("Binary exists: {}", binary_exists);
+    info!("{}", container_id);
 
     //remove_container(&docker, &container_id).await?;
     let output = ContainerOutput {
         logs: container_logs,
-        id: container_id.parse::<i32>()?,
+        id: container_id,
         exit_code: 0,
     };
-    // Return the binary file
-    let mut binary_file = File::open(binary_path).await?;
-    Ok(binary_file)
+
+    let mut binary_file = tempfile::NamedTempFile::new()?;
+    binary_file.write_all(&binary_file_bytes)?;
+    Ok(binary_file.into_file().into())
 }
 
 pub async fn send_stdin_to_container(
@@ -232,29 +260,59 @@ pub async fn send_stdin_to_container(
 }
 
 pub async fn configure_and_run_secure_container(
+    file: &mut File,
     preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<ContainerOutput, anyhow::Error> {
     // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
 
-    let test_file_path = "./rust_server/demo_code/program.o";
+    build_image_from_preset(preset).await?;
+
+    // Check if image exists
+    let image = docker
+        .inspect_image(&preset.create_image_options().from_image)
+        .await;
+    if image.is_err() {
+        return Err(anyhow::anyhow!("Failed to build image"));
+    }
 
     remove_old_container(&docker, preset.name()).await?;
 
     let container_id = create_container(&docker, preset).await?;
+    info!("Container created: {}", container_id);
     // Create app folder in container
     // run_command_in_container(&docker, &container_id, "mkdir /app").await?;
 
-    copy_file_into_container(&docker, &container_id, test_file_path, "/").await?;
+    // Create a tempdir to store the source file
+    let temp_dir = TempDir::new("gcc_container").expect("Failed to create tempdir");
+    // Write file into tempdir
+    let mut tmp_file = File::create(temp_dir.path().join("program.o"))
+        .await
+        .expect("Failed to create file");
+
+    tokio::io::copy(file, &mut tmp_file)
+        .await
+        .expect("Failed to copy file");
+
+    copy_file_into_container(
+        &docker,
+        &container_id,
+        temp_dir.path().to_str().unwrap(),
+        "/",
+    )
+    .await?;
+    info!("Starting container");
     start_container(&docker, &container_id).await?;
     send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
+    run_command_in_container(&docker, &container_id, "/app/program.o").await?;
     let container_logs = pull_logs(&docker, &container_id, preset).await?;
 
     stop_container(&docker, &container_id).await?;
+    info!("{}", container_id);
     //remove_container(&docker, &container_id).await?;
     let output = ContainerOutput {
         logs: container_logs,
-        id: container_id.parse::<i32>()?,
+        id: container_id,
         exit_code: 0,
     };
 
@@ -270,9 +328,10 @@ fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyh
     Ok(tar.into_inner()?)
 }
 
+#[derive(Debug)]
 pub struct ContainerOutput {
     pub logs: String,
-    pub id: i32,
+    pub id: String,
     pub exit_code: i64,
 }
 
@@ -296,7 +355,7 @@ pub async fn start_game_container(
     let logs = pull_logs(&docker, &container_id, preset).await?;
     let output: ContainerOutput = ContainerOutput {
         logs,
-        id: container_id.parse::<i32>()?,
+        id: container_id,
         exit_code: 0,
     };
     Ok(output)

@@ -63,6 +63,7 @@ axum-test = "14.2.2"
 derived = "0.4.2"
 tempdir = "0.3.7"
 maplit = "1.0.2"
+tokio-stream = { version = "0.1.14", features = ["fs"] }
 
 [dev-dependencies]
 httpc-test = "0.1.8"

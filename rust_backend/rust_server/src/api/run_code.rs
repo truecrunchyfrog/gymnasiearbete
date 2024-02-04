@@ -4,7 +4,7 @@ use crate::{
     database::connection::get_file_from_id,
     docker::{
         api::gcc_container,
-        profiles::{COMPILER_PRESET, HELLO_WORLD_PRESET},
+        profiles::{CodeRunnerPreset, CODE_RUNNER_PRESET, COMPILER_PRESET, HELLO_WORLD_PRESET},
     },
     Result,
 };
@@ -26,10 +26,11 @@ use crate::{
 };
 
 pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
-    let logs = run_hello_world().await?;
+    //let logs = run_hello_world().await?;
+
     let body = json!({
         "status":"success",
-        "logs": logs,
+        "logs": "",
     });
     Ok(axum::Json(body))
 }
@@ -38,6 +39,7 @@ pub async fn run_user_bin(target: &std::fs::File, input: String) -> Result<Strin
     todo!()
 }
 
+/*
 pub async fn run_hello_world() -> Result<String> {
     let preset = HELLO_WORLD_PRESET;
     let output = match configure_and_run_secure_container(preset).await {
@@ -47,8 +49,10 @@ pub async fn run_hello_world() -> Result<String> {
             return Err(Error::InternalServerError);
         }
     };
+    info!("Logs: {}", output.logs);
     Ok(output.logs)
 }
+*/
 
 #[derive(Deserialize)]
 pub struct BuildInfo {
@@ -65,7 +69,7 @@ pub async fn build_file(ctx: Ctx, payload: Json<BuildInfo>) -> Result<Json<Value
     Ok(axum::Json(body))
 }
 
-async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
+pub async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
     let mut tmp_file = tempfile().map_err(|e| {
         error!("Failed to create tempfile: {}", e);
         Error::InternalServerError
@@ -96,13 +100,25 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
     let preset = COMPILER_PRESET;
     let mut tokio_file = tokio::fs::File::from_std(tmp_file);
 
-    let bin = gcc_container(&mut tokio_file, preset).await.map_err(|e| {
+    let mut bin = gcc_container(&mut tokio_file, preset).await.map_err(|e| {
         error!("Failed to build file: {}", e);
         Error::InternalServerError
     })?;
 
+    let preset_2 = CODE_RUNNER_PRESET;
+    let status = configure_and_run_secure_container(&mut bin, preset_2)
+        .await
+        .map_err(|e| {
+            error!("Failed to run file: {}", e);
+            Error::InternalServerError
+        })?;
+
+    println!("Logs: {:?}", status);
+
     let json = Json(json!({
-        "message": "Successfully uploaded file"
+        "message": "Successfully uploaded file",
+        "status": "success",
+        "logs": status.logs,
     }));
     Ok(json)
 }

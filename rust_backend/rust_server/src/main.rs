@@ -6,7 +6,7 @@ use tokio::time::Duration;
 
 use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
-use crate::api::run_code::{build_file, run_user_code};
+use crate::api::run_code::{build_file, build_file_upload, run_user_code};
 use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
 use crate::tasks::start_task_thread;
 
@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
         .route("/files", get(get_user_files))
         .route("/info", get(get_server_status))
         .route("/run", post(run_user_code))
-        .route("/build", post(build_file))
+        .route("/build", post(build_file_upload))
         .layer(middleware::map_response(main_response_mapper))
         .layer(middleware::from_fn(api::authentication::mw_ctx_resolver))
         .layer(CookieManagerLayer::new())
