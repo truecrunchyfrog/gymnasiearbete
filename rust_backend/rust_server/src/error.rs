@@ -6,6 +6,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Serialize, strum_macros::AsRefStr)]
 #[serde(tag = "type", content = "data")]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     LoginFail,
     UserNotFound,

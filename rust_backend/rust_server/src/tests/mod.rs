@@ -1,6 +1,6 @@
+use crate::api;
 use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
-use crate::{api, main_response_mapper};
 use axum::routing::post;
 use axum::{middleware, Json, Router};
 use axum_test::TestServer;
@@ -17,11 +17,17 @@ fn get_server() -> TestServer {
         .default_content_type("application/json")
         .build();
 
-    axum_test::TestServer::new_with_config(app, config).unwrap()
+    match axum_test::TestServer::new_with_config(app, config) {
+        Ok(o) => o,
+        Err(e) => {
+            println!("Failed to create test server: {}", e);
+            panic!("Failed to create test server");
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
+mod api_tests {
     use super::*;
     #[tokio::test]
     async fn registration_test() {
@@ -42,10 +48,11 @@ mod tests {
         }
 
         let response = response.json::<Value>();
-        let response = response.get("result").unwrap();
-        let response = serde_json::from_value::<RegisterResponse>(response.clone()).unwrap();
+        let response = response.get("result").expect("Failed to get result");
+        let response = serde_json::from_value::<RegisterResponse>(response.clone())
+            .expect("Failed to deserialize response");
 
-        assert_eq!(response.success, true);
+        assert!(response.success, "Failed to register user");
     }
     #[tokio::test]
     async fn login_test() {
@@ -64,9 +71,10 @@ mod tests {
             success: bool,
         }
         let response = response.json::<Value>();
-        let response = response.get("result").unwrap();
-        let response = serde_json::from_value::<RequestResult>(response.clone()).unwrap();
+        let response = response.get("result").expect("Failed to get result");
+        let response = serde_json::from_value::<RequestResult>(response.clone())
+            .expect("Failed to deserialize response");
 
-        assert_eq!(response.success, true);
+        assert!(response.success, "Failed to login user");
     }
 }

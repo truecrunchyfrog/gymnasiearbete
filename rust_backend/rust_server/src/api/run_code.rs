@@ -1,6 +1,11 @@
-use std::io::Write;
-
-use crate::{docker::profiles::EXAMPLE_PROFILE, Result};
+use crate::{
+    database::connection::get_file_from_id,
+    docker::{
+        api::{gcc_container, ContainerOutput},
+        profiles::{CodeRunnerPreset, CODE_RUNNER_PRESET, COMPILER_PRESET, HELLO_WORLD_PRESET},
+    },
+    Result,
+};
 use axum::{
     debug_handler,
     extract::{self, Multipart},
@@ -13,49 +18,13 @@ use tempfile::{tempfile, NamedTempFile};
 use tokio::{fs::File, io::AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::{
-    ctx::Ctx, docker::api::configure_and_run_secure_container, schema::session_tokens::user_uuid,
-    Error,
-};
+use crate::{ctx::Ctx, docker::api::run_preset, schema::session_tokens::user_uuid, Error};
 
-pub async fn run_user_code(ctx: Ctx) -> Result<Json<Value>> {
-    todo!()
-}
-
-pub async fn run_user_bin(file: NamedTempFile, input: String) -> Result<String> {
-    todo!()
-}
-
-async fn get_file_from_header(headers: axum::http::HeaderMap) -> Result<String> {
-    match headers.get("file_id") {
-        Some(value) => match value.to_str() {
-            Ok(o) => return Ok(o.to_string()),
-            Err(_e) => return Err(Error::FileNotFound),
-        },
-        None => return Err(Error::FileNotFound),
-    };
-}
-
-#[derive(Deserialize)]
-pub struct BuildInfo {
-    file_id: String,
-}
-
-#[debug_handler]
-pub async fn build_file(ctx: Ctx, payload: Json<BuildInfo>) -> Result<Json<Value>> {
-    let file_id = payload.file_id.clone();
-    let body = json!({
-        "status":"success",
-        "file_id": file_id,
-    });
-    Ok(axum::Json(body))
-}
-
-async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
-    let mut tmp_file = tempfile().map_err(|e| {
+pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
+    let mut tmp_file = tokio::fs::File::from_std(tempfile().map_err(|e| {
         error!("Failed to create tempfile: {}", e);
         Error::InternalServerError
-    })?;
+    })?);
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
         let name = field.name().ok_or(Error::InternalServerError)?.to_string();
@@ -69,29 +38,45 @@ async fn build_file_upload(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
 
         println!("Length of `{}` is {} bytes", name, data.len());
 
-        // Create a tempfile object from bytes
-        match tmp_file.write_all(&data) {
-            Ok(()) => {}
-            Err(e) => {
-                error!("Failed to write to tempfile: {}", e);
-                return Err(Error::InternalServerError);
-            }
-        };
+        if let Err(e) = tmp_file.write_all(&data).await {
+            error!("Failed to write to file: {}", e);
+            return Err(Error::InternalServerError);
+        }
     }
-    todo!();
-    /*
-    gcc_container(tmp_file.into()).await.map_err(|e| {
+
+    let mut artifact = build_file(&mut tmp_file).await.map_err(|e| {
         error!("Failed to build file: {}", e);
         Error::InternalServerError
     })?;
 
+    let status = run_file(&mut artifact).await.map_err(|e| {
+        error!("Failed to run file: {}", e);
+        Error::InternalServerError
+    })?;
+
     let json = Json(json!({
-        "message": "Successfully uploaded file"
+        "message": "Successfully uploaded file",
+        "status": "success",
+
     }));
     Ok(json)
-    */
 }
 
-pub async fn setup_game_container(program: NamedTempFile) -> Result<String> {
-    todo!()
+pub async fn run_file(file: &mut File) -> Result<ContainerOutput> {
+    let preset = CODE_RUNNER_PRESET;
+    let status = run_preset(file, preset).await.map_err(|e| {
+        error!("Failed to run file: {}", e);
+        Error::InternalServerError
+    })?;
+    Ok(status)
+}
+
+pub async fn build_file(file: &mut File) -> Result<File> {
+    let preset = COMPILER_PRESET;
+
+    let mut bin = gcc_container(file, preset).await.map_err(|e| {
+        error!("Failed to build file: {}", e);
+        Error::InternalServerError
+    })?;
+    Ok(bin)
 }
