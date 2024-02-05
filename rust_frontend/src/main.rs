@@ -73,7 +73,7 @@ fn client_with_token(token_cookie: String) -> Client {
 
 #[get("/")]
 fn index(user: User) -> Template {
-    Template::render("index", context! {user: user})
+    Template::render("index", context! {user})
 }
 
 #[get("/?<i>", rank = 2)]
@@ -176,24 +176,24 @@ async fn do_register(form: Form<UsernamePasswordForm<'_>>) -> Redirect {
 }
 
 
-#[get("/publish-program?<e>")]
-fn publish_program(user: User, e: Option<&str>) -> Template {
-    Template::render("publish_program", context! {user: user, err_msg: e})
+#[get("/submit-program?<e>")]
+fn submit_program(user: User, e: Option<&str>) -> Template {
+    Template::render("submit_program", context! {user, err_msg: e})
 }
 
 #[derive(FromForm)]
-struct PublishProgramForm<'r> {
+struct SubmitProgramForm<'r> {
     file: TempFile<'r>
 }
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
-struct ApiPublishProgram {
+struct ApiSubmitProgram {
     status: String
 }
 
-#[post("/publish-program", data = "<in_form>")]
-async fn do_publish_program(_user: User, cookies: &CookieJar<'_>, in_form: Form<PublishProgramForm<'_>>) -> Redirect {
+#[post("/submit-program", data = "<in_form>")]
+async fn do_submit_program(_user: User, cookies: &CookieJar<'_>, in_form: Form<SubmitProgramForm<'_>>) -> Redirect {
     let mut buf = Vec::new();
     in_form.file.open()
         .await.unwrap()
@@ -209,12 +209,30 @@ async fn do_publish_program(_user: User, cookies: &CookieJar<'_>, in_form: Form<
         .multipart(out_form)
         .send().await.unwrap();
 
-    let response_json = response.json::<ApiPublishProgram>().await.unwrap();
+    let response_json = response.json::<ApiSubmitProgram>().await.unwrap();
 
     Redirect::to(match response_json.status.as_str() {
         "success" => uri!(index),
-        _ => uri!(publish_program(Some("could not upload binary")))
+        _ => uri!(submit_program(Some("server declined binary")))
     })
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct ApiFileItem {
+    file_id: String
+}
+
+#[get("/my-submissions?<s>")]
+async fn list_submissions(user: User, cookies: &CookieJar<'_>, s: Option<bool>) -> Template {
+    let response = client_with_token(cookies.get("sessionToken")
+        .unwrap().to_string())
+        .get(api_url("files"))
+        .send().await.unwrap();
+
+    let files = response.json::<Vec<ApiFileItem>>().await.unwrap();
+
+    Template::render("my_submissions", context! {user, files, s})
 }
 
 fn render_no_context(template: &'static str) -> Template {
@@ -241,7 +259,8 @@ fn rocket() -> _ {
             login, do_login, already_logged_in,
             do_log_out,
             register, do_register, already_reg_and_logged_in,
-            publish_program, do_publish_program
+            submit_program, do_submit_program,
+            list_submissions
         ])
         .register("/", catchers![ not_found, internal_error ])
         .attach(Template::fairing())
