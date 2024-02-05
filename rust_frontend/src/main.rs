@@ -1,4 +1,5 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 use rocket_dyn_templates::Template;
 use rocket_sync_db_pools::{database, diesel};
 
