@@ -39,7 +39,7 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
 
     let user_hash = user.password_hash.clone();
 
-    if !check_password(&payload.pwd, &user_hash) {
+    if !check_password(&payload.password, &user_hash) {
         let body = Json(json!({
             "result": {
                 "success": false,
@@ -74,7 +74,6 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
         "result": {
             "success": true,
             "token": token,
-
         }
     }));
 
@@ -108,5 +107,5 @@ fn create_cookie(token: UploadToken) -> String {
 #[derive(Debug, Deserialize)]
 pub struct LoginPayload {
     username: String,
-    pwd: String,
+    password: String,
 }
