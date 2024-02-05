@@ -1,14 +1,19 @@
 use bollard::exec::CreateExecOptions;
 use bollard::image::{BuildImageOptions, CreateImageOptions};
 use bollard::service::{Mount, MountVolumeOptions};
+use futures::TryStreamExt;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use tokio::io::AsyncReadExt;
 use tokio_stream::StreamExt;
 
-use crate::docker::build_image::{self, build_image_from_preset};
+use crate::docker::build_image::{self, get_image};
+use crate::docker::common::image_exists;
 use crate::schema::files::id;
-use bollard::container::{Config, CreateContainerOptions, LogsOptions, StartContainerOptions};
+use bollard::container::{
+    Config, CreateContainerOptions, LogOutput, LogsOptions, StartContainerOptions,
+    StopContainerOptions, WaitContainerOptions,
+};
 use bollard::container::{DownloadFromContainerOptions, UploadToContainerOptions};
 use bollard::Docker;
 use tempfile::{tempfile, NamedTempFile};
@@ -62,18 +67,24 @@ async fn remove_old_container(
     Ok(())
 }
 
-async fn pull_logs(
+async fn get_logs(
     docker: &Docker,
-    container_id: &str,
     preset: impl ContainerPreset,
-) -> Result<String, bollard::errors::Error> {
-    // Pull logs until the container stops
-    let mut logs_stream = docker.logs(container_id, Some(preset.logs_options()));
-    let mut logs = String::new();
-    while let Some(log) = logs_stream.try_next().await? {
-        logs.push_str(&log.to_string());
-    }
-    info!("Logs: {}", logs);
+) -> Result<Vec<LogOutput>, bollard::errors::Error> {
+    let container_name = preset.info().name;
+
+    let options = LogsOptions {
+        follow: true,
+        stdout: true,
+        stderr: true,
+        ..preset.logs_options()
+    };
+
+    let logs = docker
+        .logs(&container_name, Some(options))
+        .into_stream()
+        .try_collect::<Vec<_>>()
+        .await?;
     Ok(logs)
 }
 
@@ -103,9 +114,11 @@ async fn copy_file_into_container(
 }
 
 async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), bollard::errors::Error> {
-    info!("Stopping container");
-    // Stop the container
-    docker.stop_container(container_id, None).await?;
+    info!("Stopping container {}", container_id);
+
+    let options: StopContainerOptions = StopContainerOptions { t: 1 };
+
+    let _ = docker.stop_container(container_id, Some(options)).await?;
     Ok(())
 }
 
@@ -115,8 +128,8 @@ async fn remove_container(
 ) -> Result<(), bollard::errors::Error> {
     info!("Removing container");
     // Stop and remove the container
-    docker.stop_container(container_id, None).await?;
-    docker.remove_container(container_id, None).await?;
+    let _ = docker.stop_container(container_id, None).await?;
+    let _ = docker.remove_container(container_id, None).await?;
     Ok(())
 }
 
@@ -129,7 +142,7 @@ pub async fn hello_world_container_test() -> Result<(), bollard::errors::Error> 
 
     let container_id = create_container(&docker, preset).await?;
     start_container(&docker, &container_id).await?;
-    pull_logs(&docker, &container_id, preset).await?;
+    let logs = get_logs(&docker, preset).await?;
 
     stop_container(&docker, &container_id).await?;
     remove_container(&docker, &container_id).await?;
@@ -137,13 +150,13 @@ pub async fn hello_world_container_test() -> Result<(), bollard::errors::Error> 
     Ok(())
 }
 
-async fn run_command_in_container(
+async fn exec_in_container(
     docker: &Docker,
     container_id: &str,
-    cmd: &str,
+    command: Vec<&str>,
 ) -> Result<(), bollard::errors::Error> {
     let config = CreateExecOptions {
-        cmd: Some(vec![cmd.to_string()]),
+        cmd: Some(command),
         ..Default::default()
     };
     docker.create_exec(container_id, config).await?;
@@ -173,20 +186,18 @@ pub async fn gcc_container(
 ) -> Result<File, anyhow::Error> {
     let docker = Docker::connect_with_local_defaults()?;
 
-    build_image_from_preset(preset).await?;
+    let container_name = preset.info().name;
+    let image_name = preset.info().image;
 
-    // Check if image exists
-    let image = docker.inspect_image(preset.name()).await;
-    if image.is_err() {
-        return Err(anyhow::anyhow!("Failed to build image"));
-    }
+    let image = match image_exists(&docker, &image_name).await? {
+        true => docker.inspect_image(&image_name).await?,
+        false => get_image(preset).await?,
+    };
 
-    info!("Image exists: {}", image.is_ok());
-
-    remove_old_container(&docker, preset.name())
+    remove_old_container(&docker, &container_name)
         .await
         .expect("Failed to remove old container");
-    let mut updated_preset = preset.clone();
+
     // Create a tempdir to store the source file
     let temp_dir = TempDir::new("gcc_container").expect("Failed to create tempdir");
     // Write file into tempdir
@@ -197,20 +208,9 @@ pub async fn gcc_container(
         .await
         .expect("Failed to copy file");
 
-    let volume: Option<HashMap<String, HashMap<(), ()>>> = Some(hashmap! {
-        // Inner
-        "/app".to_string() => hashmap! {},
-        // Outer
-        format!("{}",&temp_dir.path().to_string_lossy()) => hashmap! {},
-    });
+    let container_id = create_container(&docker, preset).await?;
 
-    updated_preset.container_config().volumes = volume;
-
-    let container_id = create_container(&docker, updated_preset)
-        .await
-        .expect("Failed to create container");
-
-    copy_file_into_container(
+    let _ = copy_file_into_container(
         &docker,
         &container_id,
         temp_dir.path().to_str().unwrap(),
@@ -218,21 +218,21 @@ pub async fn gcc_container(
     )
     .await?;
 
-    start_container(&docker, &container_id)
-        .await
-        .expect("Failed to start container");
+    let _ = start_container(&docker, &container_id).await?;
 
-    let container_logs = pull_logs(&docker, &container_id, updated_preset)
-        .await
-        .expect("Failed to pull logs");
+    let wait_options = WaitContainerOptions {
+        condition: "not-running",
+        ..Default::default()
+    };
 
-    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/app/program.o")
-        .await
-        .expect("Failed to get file from container");
+    let _ = docker.wait_container(&container_id, Some(wait_options));
 
-    stop_container(&docker, &container_id).await?;
+    let container_logs = get_logs(&docker, preset).await?;
 
-    info!("{}", container_id);
+    let binary_file_bytes =
+        get_file_from_container(&docker, &container_id, "/app/program.o").await?;
+
+    let _ = stop_container(&docker, &container_id).await?;
 
     //remove_container(&docker, &container_id).await?;
     let output = ContainerOutput {
@@ -240,6 +240,8 @@ pub async fn gcc_container(
         id: container_id,
         exit_code: 0,
     };
+
+    info!("{:?}", output);
 
     let mut binary_file = tempfile::NamedTempFile::new()?;
     binary_file.write_all(&binary_file_bytes)?;
@@ -259,57 +261,53 @@ pub async fn send_stdin_to_container(
     Ok(())
 }
 
-pub async fn configure_and_run_secure_container(
+pub async fn run_preset(
     file: &mut File,
     preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<ContainerOutput, anyhow::Error> {
-    // Connect to the local Docker daemon
     let docker = Docker::connect_with_local_defaults()?;
 
-    build_image_from_preset(preset).await?;
+    let container_name = preset.info().name;
+    let image_name = preset.info().image;
 
-    // Check if image exists
-    let image = docker
-        .inspect_image(&preset.create_image_options().from_image)
-        .await;
-    if image.is_err() {
-        return Err(anyhow::anyhow!("Failed to build image"));
-    }
+    let image = match image_exists(&docker, &image_name).await? {
+        true => docker.inspect_image(&image_name).await?,
+        false => get_image(preset).await?,
+    };
 
-    remove_old_container(&docker, preset.name()).await?;
+    remove_old_container(&docker, &container_name).await?;
 
     let container_id = create_container(&docker, preset).await?;
-    info!("Container created: {}", container_id);
-    // Create app folder in container
-    // run_command_in_container(&docker, &container_id, "mkdir /app").await?;
 
     // Create a tempdir to store the source file
-    let temp_dir = TempDir::new("gcc_container").expect("Failed to create tempdir");
+    let temp_dir = TempDir::new("app").expect("Failed to create tempdir");
+
     // Write file into tempdir
     let mut tmp_file = File::create(temp_dir.path().join("program.o"))
         .await
         .expect("Failed to create file");
 
+    // Copy the source file into the tempdir
     tokio::io::copy(file, &mut tmp_file)
         .await
         .expect("Failed to copy file");
 
-    copy_file_into_container(
+    let _ = copy_file_into_container(
         &docker,
         &container_id,
         temp_dir.path().to_str().unwrap(),
         "/",
     )
     .await?;
-    info!("Starting container");
-    start_container(&docker, &container_id).await?;
-    send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
-    run_command_in_container(&docker, &container_id, "/app/program.o").await?;
-    let container_logs = pull_logs(&docker, &container_id, preset).await?;
 
-    stop_container(&docker, &container_id).await?;
+    let _ = start_container(&docker, &container_id).await?;
+    let _ = send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
+    let _ = exec_in_container(&docker, &container_id, vec!["/app/program.o"]).await?;
+    let container_logs = get_logs(&docker, preset).await?;
+
+    let _ = stop_container(&docker, &container_id).await?;
     info!("{}", container_id);
-    //remove_container(&docker, &container_id).await?;
+
     let output = ContainerOutput {
         logs: container_logs,
         id: container_id,
@@ -330,33 +328,7 @@ fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyh
 
 #[derive(Debug)]
 pub struct ContainerOutput {
-    pub logs: String,
+    pub logs: Vec<LogOutput>,
     pub id: String,
     pub exit_code: i64,
-}
-
-pub async fn start_game_container(
-    program: NamedTempFile,
-    preset: impl ContainerPreset + std::marker::Copy,
-) -> Result<ContainerOutput, anyhow::Error> {
-    let docker = Docker::connect_with_local_defaults()?;
-
-    let program_path = match program.path().to_str() {
-        Some(o) => o,
-        None => return Err(anyhow::anyhow!("Failed to get path")),
-    };
-
-    remove_old_container(&docker, preset.name()).await?;
-
-    let container_id = create_container(&docker, preset).await?;
-
-    copy_file_into_container(&docker, &container_id, program_path, "/").await?;
-    start_container(&docker, &container_id).await?;
-    let logs = pull_logs(&docker, &container_id, preset).await?;
-    let output: ContainerOutput = ContainerOutput {
-        logs,
-        id: container_id,
-        exit_code: 0,
-    };
-    Ok(output)
 }
