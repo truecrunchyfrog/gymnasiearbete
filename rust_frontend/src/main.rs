@@ -6,7 +6,13 @@ use rocket::{
 };
 use rocket_dyn_templates::{context, Template};
 use std::{collections::HashMap, env, path::{Path, PathBuf}};
-use once_cell::sync::Lazy;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref API_ENDPOINT_URL: String =
+        env::var("API_ENDPOINT_URL")
+        .expect("missing environment variable: API_ENDPOINT_URL");
+}
 
 #[derive(FromForm, Serialize)]
 #[serde(crate = "rocket::serde")]
@@ -48,8 +54,6 @@ impl<'r> FromRequest<'r> for User {
         }
     }
 }
-
-const API_ENDPOINT_URL: Lazy<String> = Lazy::new(|| env::var("API_ENDPOINT_URL").expect("missing environment variable: API_ENDPOINT_URL"));
 
 fn api_url(endpoint_path: &str) -> String {
     String::from(&*API_ENDPOINT_URL) + "/" + endpoint_path
@@ -246,7 +250,6 @@ fn not_found() -> Template {
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![
-            create_fake_session,
             index, logged_out,
             static_file,
             login, do_login, already_logged_in,
