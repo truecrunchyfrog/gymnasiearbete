@@ -18,13 +18,6 @@ struct UsernamePasswordForm<'r> {
 #[derive(Debug)]
 struct AuthError(String);
 
-#[get("/cfs")]
-fn create_fake_session(cookies: &CookieJar<'_>) -> Redirect {
-    cookies.add(("sessionToken", "test"));
-
-    Redirect::to(uri!(index))
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 struct User {
