@@ -16,10 +16,16 @@ use uuid::Uuid;
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let connection_url = env::var("DB_URL").expect("DB_URL must be set");
 
-    let mut conn = PgConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
+    let mut conn_res = PgConnection::establish(&connection_url);
+    let mut conn = match conn_res {
+        Ok(conn) => conn,
+        Err(err) => {
+            error!("Error connecting to database: {}", err);
+            panic!("Error connecting to database: {}", err);
+        }
+    };
     if cfg!(test) {
         match conn.begin_test_transaction() {
             Ok(_) => info!("Test transaction started"),

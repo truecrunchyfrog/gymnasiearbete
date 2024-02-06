@@ -23,8 +23,6 @@ use tokio::sync::oneshot::error;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use uuid::Uuid;
 
-use super::session;
-
 async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
     let token = token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
     match parse_token(token) {

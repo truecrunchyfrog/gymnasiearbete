@@ -65,9 +65,4 @@ diesel::joinable!(files -> users (owner_uuid));
 diesel::joinable!(session_tokens -> users (user_uuid));
 diesel::joinable!(simulations -> files (ran_file_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    files,
-    session_tokens,
-    simulations,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(files, session_tokens, simulations, users,);

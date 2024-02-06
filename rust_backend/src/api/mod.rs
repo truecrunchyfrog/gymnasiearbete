@@ -6,4 +6,3 @@ pub mod log_in;
 pub mod run_code;
 pub mod server;
 pub mod server_status;
-pub mod session;
