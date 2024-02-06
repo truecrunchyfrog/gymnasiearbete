@@ -1,0 +1,21 @@
+{% extends "base" %}
+
+{% block title %}home{% endblock %}
+
+{% block content %}
+
+<a href="/submit-program">
+    <button class="ui green button">
+        <i class="plus icon"></i>
+        submit a program
+    </button>
+</a>
+
+<a href="/my-submissions">
+    <button class="ui blue button">
+        <i class="list icon"></i>
+        my submissions
+    </button>
+</a>
+
+{% endblock %}

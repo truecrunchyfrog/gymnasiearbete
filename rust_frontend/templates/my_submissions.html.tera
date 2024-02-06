@@ -1,0 +1,25 @@
+{% extends "base" %}
+
+{% block title %}my submissions{% endblock %}
+
+{% block content %}
+
+{% if s %}
+<div class="ui positive message">your program was successfully submitted</div>
+{% endif %}
+
+<h1>my submissions</h1>
+
+<div class="ui inverted segment">
+    <div class="ui inverted relaxed divided list">
+        {% for file in files %}
+        <div class="item">
+            <div class="content">
+            <div class="header">{{ file.file_id }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

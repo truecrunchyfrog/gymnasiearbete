@@ -1,2 +1,2 @@
-[default.databases.my_db]
-url = "postgres://postgres:postgres@localhost/my_db"
+[global]
+secret_key = "lDXxaFEZF2wcJkXP/2XLNpcCkpsc9pjTp6tuSwYpoQE="

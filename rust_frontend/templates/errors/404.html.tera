@@ -1,0 +1,9 @@
+{% extends "base" %}
+
+{% block title %}404{% endblock %}
+
+{% block content %}
+
+<h1>this page was not found</h1>
+
+{% endblock %}

@@ -51,12 +51,13 @@ pub async fn root() -> Result<Json<Value>> {
 
 pub async fn get_user_from_token(headers: HeaderMap) -> Result<User> {
     let token = match get_token(headers).await {
-        Err(_e) => return Err(Error::AuthFailTokenWrongFormat),
         Ok(t) => t,
+        Err(_) => return Err(Error::AuthFailTokenWrongFormat)
     };
 
     match get_token_owner(&token).await {
-        Ok(u) => u.map_or(Err(Error::InternalServerError), Ok),
+        Ok(Some(u)) => Ok(u),
+        Ok(None) => Err(Error::InternalServerError),
         Err(e) => {
             error!("Failed to get owner of token: {}", e);
             Err(Error::InternalServerError)
@@ -70,12 +71,13 @@ pub async fn get_user_info(ctx: Ctx) -> Result<Json<User>> {
 }
 
 async fn get_token(headers: axum::http::HeaderMap) -> Result<String> {
-    headers
-        .get(AUTHORIZATION)
-        .map_or(Err(Error::LoginFail), |value| match value.to_str() {
+    match headers.get(AUTHORIZATION) {
+        Some(value) => match value.to_str() {
             Ok(o) => Ok(o.to_string()),
             Err(_e) => Err(Error::AuthFailTokenWrongFormat),
-        })
+        }
+        None => Err(Error::LoginFail)
+    }
 }
 
 // retrieve all files from user

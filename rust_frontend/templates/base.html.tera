@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/sgma.png" />
+    <link rel="stylesheet" href="https://raw.githubusercontent.com/semantic-ui-forest/forest-themes/master/dist/semantic-ui/v2/semantic.material.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/semantic-ui@2.5.0/dist/semantic.min.css" />
+    <link rel="stylesheet" href="/static/style.css" />
+    <title>Σ - {% block title %}{% endblock title %}</title>
+    {% endblock head %}
+</head>
+<body>
+
+  <a href="/">
+    <img src="/static/sgma.png" class="ui image tiny" alt="sgma" title="s(trategic) g(ames) m(ade) a(uto)">
+    <div style="z-index: -1; width: 100vw; height: 17px; background: #c6a322; position: absolute; top: 31px; left: 0;"></div>
+  </a>
+
+  <div class="ui raised very padded text container">
+    {% block content %}{% endblock content %}
+
+    {% if user %}
+      <div class="ui divider"></div>
+      <div class="ui segment floated right">
+        <p style="display: inline;">
+          logged in as <b>{{ user.username }}</b>
+        </p>
+        <br>
+        <form action="/log-out" method="post" class="ui right floated">
+          <input type="submit" class="ui red label" style="cursor: pointer;" value="log out">
+        </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <script src="https://unpkg.com/semantic-ui@2.5.0/dist/semantic.min.js"></script>
+</body>
+</html>
