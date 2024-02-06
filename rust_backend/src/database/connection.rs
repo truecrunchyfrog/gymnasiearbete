@@ -18,8 +18,14 @@ pub fn establish_connection() -> PgConnection {
 
     let connection_url = "postgres://root:password@localhost:5432/postgres";
 
-    let mut conn = PgConnection::establish(&connection_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", connection_url));
+    let mut conn_res = PgConnection::establish(&connection_url);
+    let mut conn = match conn_res {
+        Ok(conn) => conn,
+        Err(err) => {
+            error!("Error connecting to database: {}", err);
+            panic!("Error connecting to database: {}", err);
+        }
+    };
     if cfg!(test) {
         match conn.begin_test_transaction() {
             Ok(_) => info!("Test transaction started"),
