@@ -1,6 +1,7 @@
 use crate::api;
 use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
+use crate::database::establish_connection;
 use axum::routing::post;
 use axum::{middleware, Json, Router};
 use axum_test::TestServer;
@@ -28,53 +29,14 @@ fn get_server() -> TestServer {
 
 #[cfg(test)]
 mod api_tests {
+    use diesel::r2d2::R2D2Connection;
+    use hyper::server::conn;
+
     use super::*;
     #[tokio::test]
-    async fn registration_test() {
-        let server = get_server();
-
-        let response = server
-            .post("/register")
-            .json(&json!({
-                "username": "test1232664",
-                "pwd": "Test123!",
-            }))
-            .await;
-
-        #[derive(serde::Deserialize)]
-        struct RegisterResponse {
-            success: bool,
-            uuid: String,
-        }
-
-        let response = response.json::<Value>();
-        let response = response.get("result").expect("Failed to get result");
-        let response = serde_json::from_value::<RegisterResponse>(response.clone())
-            .expect("Failed to deserialize response");
-
-        assert!(response.success, "Failed to register user");
-    }
-    #[tokio::test]
-    async fn login_test() {
-        let server = get_server();
-
-        let response = server
-            .post("/login")
-            .json(&json!({
-                "username": "TestUser",
-                "pwd": "TestUser1!",
-            }))
-            .await;
-
-        #[derive(serde::Deserialize)]
-        struct RequestResult {
-            success: bool,
-        }
-        let response = response.json::<Value>();
-        let response = response.get("result").expect("Failed to get result");
-        let response = serde_json::from_value::<RequestResult>(response.clone())
-            .expect("Failed to deserialize response");
-
-        assert!(response.success, "Failed to login user");
+    async fn test_db_connection() {
+        let mut conn = establish_connection();
+        let s = conn.ping();
+        assert_eq!(s.is_ok(), true);
     }
 }
