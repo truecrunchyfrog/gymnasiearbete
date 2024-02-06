@@ -29,8 +29,10 @@ pub fn establish_connection() -> PgConnection {
         db = dbname
     );
 
-    let mut conn =
-        PgConnection::establish(&host).unwrap_or_else(|_| panic!("Error connecting to {}", host));
+    let connection_url = format!("postgres:{}@{}:{}/{}", user, host, port, dbname);
+
+    let mut conn = PgConnection::establish(&connection_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", connection_url));
     if cfg!(test) {
         match conn.begin_test_transaction() {
             Ok(_) => info!("Test transaction started"),
