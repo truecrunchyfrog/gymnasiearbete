@@ -1,3 +1,5 @@
+name: Tests
+
 on:
   pull_request:
   push:
@@ -6,8 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-
-name: Tests
 
 jobs:
   test:
@@ -20,9 +20,8 @@ jobs:
         image: postgres
 
         env:
-          DATABASE_PORT: 5432
-          DATABASE_USER: root
-          DATABASE_DB: postgres
+          POSTGRES_USER: root
+          POSTGRES_DB: postgres
           POSTGRES_PASSWORD: postgres
 
         options: >-
@@ -44,13 +43,10 @@ jobs:
           cache-name: cache-dependencies
         with:
           path: |
-            ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
             ~/.cargo/bin
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
             target
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}
 
       - name: Build
         run: cargo build --verbose
@@ -58,12 +54,10 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
     env:
-      # The hostname used to communicate with the PostgreSQL service container
       POSTGRES_HOST: postgres
-      DATABASE_USER: root
-      DATABASE_DB: postgres
+      POSTGRES_USER: root
+      POSTGRES_DB: postgres
       POSTGRES_PASSWORD: postgres
-      # The default PostgreSQL port
       POSTGRES_PORT: 5432
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
       CARGO_INCREMENTAL: 0
