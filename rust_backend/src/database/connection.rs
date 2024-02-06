@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
 
-    let connection_url = "postgres://root@localhost:5432/postgres";
+    let connection_url = "postgres://root:password@localhost:5432/postgres";
 
     let mut conn = PgConnection::establish(&connection_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", connection_url));

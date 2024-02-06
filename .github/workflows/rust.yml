@@ -23,6 +23,7 @@ jobs:
           DATABASE_PORT: 5432
           DATABASE_USER: root
           DATABASE_DBNAME: postgres
+          POSTGRES_PASSWORD: password
 
         options: >-
           --health-cmd pg_isready
@@ -61,5 +62,6 @@ jobs:
       POSTGRES_HOST: postgres
       # The default PostgreSQL port
       POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: password
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
       CARGO_INCREMENTAL: 0
