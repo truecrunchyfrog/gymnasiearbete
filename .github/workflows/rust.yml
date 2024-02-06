@@ -20,7 +20,6 @@ jobs:
         image: postgres
 
         env:
-          POSTGRES_PASSWORD: postgres
           DATABASE_PORT: 5432
           DATABASE_USER: root
           DATABASE_DBNAME: postgres
@@ -58,11 +57,9 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
     env:
+      # The hostname used to communicate with the PostgreSQL service container
       POSTGRES_HOST: postgres
+      # The default PostgreSQL port
       POSTGRES_PORT: 5432
-      DATABASE_USER: root
-      DATABASE_DBNAME: postgres
-      POSTGRES_PASSWORD: postgres
-      DATABASE_URL: localhost
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
       CARGO_INCREMENTAL: 0

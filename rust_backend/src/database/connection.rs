@@ -16,20 +16,7 @@ use uuid::Uuid;
 pub fn establish_connection() -> PgConnection {
     dotenv().ok();
 
-    let host = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let user = env::var("DATABASE_USER").expect("DATABASE_USER must be set");
-    let port = env::var("DATABASE_PORT").expect("DATABASE_PORT must be set");
-    let dbname = env::var("DATABASE_DBNAME").expect("DATABASE_DBNAME must be set");
-
-    println!(
-        "Connecting to postgres://{user}@{host}:{port}/{db}",
-        user = user,
-        host = host,
-        port = port,
-        db = dbname
-    );
-
-    let connection_url = format!("postgres://{}@{}:{}/{}", user, host, port, dbname);
+    let connection_url = "postgres://root@localhost:5432/postgres";
 
     let mut conn = PgConnection::establish(&connection_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", connection_url));
