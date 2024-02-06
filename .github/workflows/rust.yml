@@ -57,3 +57,4 @@ jobs:
       DATABASE_USER: root
       DATABASE_DBNAME: postgres
       POSTGRES_PASSWORD: postgres
+      DATABASE_URL: localhost
