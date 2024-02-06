@@ -29,7 +29,7 @@ pub fn establish_connection() -> PgConnection {
         db = dbname
     );
 
-    let connection_url = format!("postgres:{}@{}:{}/{}", user, host, port, dbname);
+    let connection_url = format!("postgres://{}@{}:{}/{}", user, host, port, dbname);
 
     let mut conn = PgConnection::establish(&connection_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", connection_url));
