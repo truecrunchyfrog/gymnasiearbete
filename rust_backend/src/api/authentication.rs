@@ -24,6 +24,8 @@ use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use uuid::Uuid;
 
 async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
+    println!("Getting new ctx, token: {:?}", token);
+
     let token = token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
     match parse_token(token) {
         Ok(token_id) => {
@@ -64,17 +66,19 @@ pub async fn mw_ctx_resolver(
 
     let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
 
+    println!("Auth token: {:?}", auth_token);
+
     // Compute Result<Ctx>.
     let result_ctx = get_new_ctx(auth_token).await;
 
     // Remove the cookie if something went wrong other than NoAuthTokenCookie.
     if let Err(e) = &result_ctx {
+        error!("Error in mw_ctx_resolver: {:?}", e);
         if !matches!(e, Error::AuthFailNoAuthTokenCookie) {
             cookies.remove(Cookie::from(AUTH_TOKEN));
         }
     }
 
-    // Store the ctx_result in the request extension.
     req.extensions_mut().insert(result_ctx);
 
     Ok(next.run(req).await)
@@ -95,13 +99,8 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
     }
 }
 
-// Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
+// This is stupid, but it's a placeholder for now.
 #[allow(clippy::needless_pass_by_value)]
 fn parse_token(token: String) -> Result<(String)> {
-    info!("Parsing token: {}", token);
-    let re = regex_captures!(r"sessionToken=(?P<token>.+)", &token)
-        .ok_or(Error::AuthFailTokenWrongFormat)?;
-    let fount_token = re.1.to_string();
-
-    Ok(fount_token)
+    Ok(token)
 }

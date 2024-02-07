@@ -18,8 +18,6 @@ use axum::{middleware, Json, Router};
 
 use ctx::Ctx;
 
-use env_logger::{Env, Logger};
-
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use tasks::TaskManager;
@@ -77,14 +75,6 @@ async fn startup_checks() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env = Env::new()
-        // filters out any messages that aren't at "info" log level or above
-        .filter_or("MY_LOG", "info")
-        // always use styles when printing
-        .write_style_or("MY_LOG_STYLE", "always");
-
-    let logger = Logger::from_env(env);
-
     startup_checks().await?;
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
