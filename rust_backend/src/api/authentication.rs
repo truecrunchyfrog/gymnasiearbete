@@ -24,8 +24,6 @@ use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use uuid::Uuid;
 
 async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
-    println!("Getting new ctx, token: {:?}", token);
-
     let token = token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
     match parse_token(token) {
         Ok(token_id) => {
@@ -48,7 +46,7 @@ async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
 }
 
 pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -> Result<Response> {
-    println!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
+    info!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
 
     ctx?;
 
@@ -62,11 +60,11 @@ pub async fn mw_ctx_resolver(
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response> {
-    println!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
+    info!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
 
     let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
 
-    println!("Auth token: {:?}", auth_token);
+    info!("Auth token: {:?}", auth_token);
 
     // Compute Result<Ctx>.
     let result_ctx = get_new_ctx(auth_token).await;

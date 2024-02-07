@@ -1,10 +1,11 @@
-use bollard::exec::CreateExecOptions;
+use bollard::exec::{self, CreateExecOptions};
 use bollard::image::{BuildImageOptions, CreateImageOptions};
-use bollard::service::{Mount, MountVolumeOptions};
+use bollard::service::{ExecConfig, Mount, MountVolumeOptions};
 use futures::TryStreamExt;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use tokio::io::AsyncReadExt;
+use std::string;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::StreamExt;
 
 use crate::docker::build_image::{self, get_image};
@@ -45,8 +46,10 @@ async fn create_container(
 ) -> Result<String, bollard::errors::Error> {
     info!("Creating container");
 
-    let container =
-        docker.create_container(Some(preset.create_options()), preset.container_config());
+    let config = preset.container_config();
+    info!("Config: {:?}", config);
+
+    let container = docker.create_container(Some(preset.create_options()), config);
     let container_id = match container.await {
         Ok(o) => o.id,
         Err(e) => return Err(e),
@@ -91,7 +94,7 @@ async fn get_logs(
 async fn copy_file_into_container(
     docker: &Docker,
     container_id: &str,
-    file_path: &str,
+    file: File,
     destination: &str,
 ) -> Result<(), anyhow::Error> {
     let options = Some(UploadToContainerOptions {
@@ -99,12 +102,12 @@ async fn copy_file_into_container(
         ..Default::default()
     });
 
-    let tmp_file = create_targz_archive(file_path)?;
-    let mut file = File::open(tmp_file.path()).await?;
+    let archive = create_targz_archive(file).await?;
+    let mut archive_file = File::open(archive.path()).await?;
 
     // let mut file = File::open("./rust_server/demo_code/program.tar.gz").await?;
     let mut contents = Vec::new();
-    file.read_to_end(&mut contents).await?;
+    archive_file.read_to_end(&mut contents).await?;
 
     docker
         .upload_to_container(container_id, options, contents.into())
@@ -181,7 +184,7 @@ async fn get_file_from_container(
 }
 
 pub async fn gcc_container(
-    source_file: &mut File,
+    source_file: File,
     preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<File, anyhow::Error> {
     let docker = Docker::connect_with_local_defaults()?;
@@ -198,25 +201,13 @@ pub async fn gcc_container(
         .await
         .expect("Failed to remove old container");
 
-    // Create a tempdir to store the source file
-    let temp_dir = TempDir::new("gcc_container").expect("Failed to create tempdir");
-    // Write file into tempdir
-    let mut file = File::create(temp_dir.path().join("program.c"))
-        .await
-        .expect("Failed to create file");
-    tokio::io::copy(source_file, &mut file)
-        .await
-        .expect("Failed to copy file");
-
     let container_id = create_container(&docker, preset).await?;
 
-    let _ = copy_file_into_container(
-        &docker,
-        &container_id,
-        temp_dir.path().to_str().unwrap(),
-        "/",
-    )
-    .await?;
+    info!("Copying file into container");
+
+    let _ = copy_file_into_container(&docker, &container_id, source_file, "/").await?;
+
+    info!("Starting container");
 
     let _ = start_container(&docker, &container_id).await?;
 
@@ -225,14 +216,27 @@ pub async fn gcc_container(
         ..Default::default()
     };
 
+    info!("Waiting for container to finish");
+
     let _ = docker.wait_container(&container_id, Some(wait_options));
+
+    info!("Executing command in container");
 
     let container_logs = get_logs(&docker, preset).await?;
 
-    let binary_file_bytes =
-        get_file_from_container(&docker, &container_id, "/app/program.o").await?;
+    // Print logs
+    println!("{:?}", container_logs);
+
+    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/program.o").await?;
 
     let _ = stop_container(&docker, &container_id).await?;
+
+    // Check length of binary file
+    println!("Length of binary file: {}", binary_file_bytes.len());
+    // Fail if the binary file is empty
+    if binary_file_bytes.is_empty() {
+        panic!("Binary file is empty");
+    }
 
     //remove_container(&docker, &container_id).await?;
     let output = ContainerOutput {
@@ -243,9 +247,10 @@ pub async fn gcc_container(
 
     info!("{:?}", output);
 
-    let mut binary_file = tempfile::NamedTempFile::new()?;
-    binary_file.write_all(&binary_file_bytes)?;
-    Ok(binary_file.into_file().into())
+    let mut binary_file: File = File::create("program.o").await?;
+    binary_file.write_all(&binary_file_bytes).await?;
+
+    Ok(binary_file)
 }
 
 pub async fn send_stdin_to_container(
@@ -277,35 +282,43 @@ pub async fn run_preset(
 
     remove_old_container(&docker, &container_name).await?;
 
+    info!("Creating container");
+
     let container_id = create_container(&docker, preset).await?;
 
     // Create a tempdir to store the source file
     let temp_dir = TempDir::new("app").expect("Failed to create tempdir");
 
     // Write file into tempdir
-    let mut tmp_file = File::create(temp_dir.path().join("program.o"))
-        .await
-        .expect("Failed to create file");
+    let mut tmp_file = File::create(temp_dir.path().join("program.o")).await?;
 
-    // Copy the source file into the tempdir
-    tokio::io::copy(file, &mut tmp_file)
-        .await
-        .expect("Failed to copy file");
+    // write file into tmp_file
+    tokio::io::copy(file, &mut tmp_file).await?;
 
-    let _ = copy_file_into_container(
-        &docker,
-        &container_id,
-        temp_dir.path().to_str().unwrap(),
-        "/",
-    )
-    .await?;
+    info!("Copying file into container");
+
+    let _ = copy_file_into_container(&docker, &container_id, tmp_file, "/").await?;
+
+    info!("Starting container");
 
     let _ = start_container(&docker, &container_id).await?;
+
+    info!("Waiting for container to finish");
+
     let _ = send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
+
+    info!("Executing command in container");
+
     let _ = exec_in_container(&docker, &container_id, vec!["/app/program.o"]).await?;
+
+    info!("Getting logs from container");
+
     let container_logs = get_logs(&docker, preset).await?;
 
+    info!("Stopping container");
+
     let _ = stop_container(&docker, &container_id).await?;
+
     info!("{}", container_id);
 
     let output = ContainerOutput {
@@ -317,11 +330,11 @@ pub async fn run_preset(
     Ok(output)
 }
 
-fn create_targz_archive(file_path: &str) -> Result<tempfile::NamedTempFile, anyhow::Error> {
-    let file = tempfile::NamedTempFile::new()?;
-    let mut tar = tar::Builder::new(file);
+async fn create_targz_archive(file: File) -> Result<tempfile::NamedTempFile, anyhow::Error> {
+    let tmp_file = tempfile::NamedTempFile::new()?;
+    let mut tar = tar::Builder::new(tmp_file);
 
-    tar.append_path_with_name(file_path, "app/program.o")?;
+    tar.append_file("program.c", &mut file.into_std().await)?;
 
     Ok(tar.into_inner()?)
 }

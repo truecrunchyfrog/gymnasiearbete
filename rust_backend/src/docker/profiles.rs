@@ -67,7 +67,7 @@ pub struct CodeRunnerPreset;
 impl ContainerPreset for CodeRunnerPreset {
     fn exec_options(&self) -> CreateExecOptions<String> {
         CreateExecOptions {
-            cmd: Some(vec!["/app/program.o".to_string()]),
+            cmd: Some(vec!["ls".to_string()]),
             ..Default::default()
         }
     }
@@ -105,7 +105,19 @@ pub struct CompilerPreset;
 impl ContainerPreset for CompilerPreset {
     fn exec_options(&self) -> CreateExecOptions<String> {
         CreateExecOptions {
-            cmd: Some(vec!["rm".to_string(), "program.c".to_string()]),
+            cmd: Some(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo 'Hello, world!'".to_string(),
+            ]),
+            ..Default::default()
+        }
+    }
+
+    fn container_config(&self) -> Config<String> {
+        Config {
+            image: Some("gcc".to_string()),
+            cmd: Some(vec!["cat".to_string(), "/program.c".to_string()]),
             ..Default::default()
         }
     }

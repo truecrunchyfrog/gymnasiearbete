@@ -9,3 +9,12 @@ pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, bollard:
     }
     Ok(false)
 }
+
+pub async fn print_containers() -> Result<(), bollard::errors::Error> {
+    let docker = Docker::connect_with_local_defaults()?;
+    let containers = docker.list_containers::<&str>(None).await?;
+    for container in containers {
+        println!("{:?}", container);
+    }
+    Ok(())
+}

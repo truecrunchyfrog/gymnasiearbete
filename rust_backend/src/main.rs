@@ -77,6 +77,8 @@ async fn startup_checks() -> Result<()> {
 async fn main() -> Result<()> {
     startup_checks().await?;
 
+    env_logger::init();
+
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());
     let state = AppState { tm: task_manager };
