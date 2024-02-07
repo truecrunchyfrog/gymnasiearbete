@@ -117,7 +117,12 @@ impl ContainerPreset for CompilerPreset {
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some("gcc".to_string()),
-            cmd: Some(vec!["cat".to_string(), "/program.c".to_string()]),
+            cmd: Some(vec![
+                "gcc".to_string(),
+                "./example.c".to_string(),
+                "-o".to_string(),
+                "example.o".to_string(),
+            ]),
             ..Default::default()
         }
     }

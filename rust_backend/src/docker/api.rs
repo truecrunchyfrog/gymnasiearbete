@@ -24,8 +24,12 @@ use tokio_stream::wrappers::ReadDirStream;
 use crate::docker::profiles::HelloWorldPreset;
 use crate::docker::profiles::{ContainerPreset, COMPILER_PRESET};
 
+use super::common::create_targz_archive;
 use super::profiles::HELLO_WORLD_PRESET;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use maplit::hashmap;
+use tar::{Builder, Header};
 use tempdir::TempDir;
 
 async fn start_container(
@@ -102,15 +106,11 @@ async fn copy_file_into_container(
         ..Default::default()
     });
 
-    let archive = create_targz_archive(file).await?;
-    let mut archive_file = File::open(archive.path()).await?;
-
-    // let mut file = File::open("./rust_server/demo_code/program.tar.gz").await?;
-    let mut contents = Vec::new();
-    archive_file.read_to_end(&mut contents).await?;
+    let test_path = "./example.c";
+    let archive = create_targz_archive(test_path).await?;
 
     docker
-        .upload_to_container(container_id, options, contents.into())
+        .upload_to_container(container_id, options, archive.into())
         .await?;
 
     Ok(())
@@ -227,7 +227,7 @@ pub async fn gcc_container(
     // Print logs
     println!("{:?}", container_logs);
 
-    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/program.o").await?;
+    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/example.o").await?;
 
     let _ = stop_container(&docker, &container_id).await?;
 
@@ -247,7 +247,7 @@ pub async fn gcc_container(
 
     info!("{:?}", output);
 
-    let mut binary_file: File = File::create("program.o").await?;
+    let mut binary_file: File = File::create("program.tar.gz").await?;
     binary_file.write_all(&binary_file_bytes).await?;
 
     Ok(binary_file)
@@ -328,15 +328,6 @@ pub async fn run_preset(
     };
 
     Ok(output)
-}
-
-async fn create_targz_archive(file: File) -> Result<tempfile::NamedTempFile, anyhow::Error> {
-    let tmp_file = tempfile::NamedTempFile::new()?;
-    let mut tar = tar::Builder::new(tmp_file);
-
-    tar.append_file("program.c", &mut file.into_std().await)?;
-
-    Ok(tar.into_inner()?)
 }
 
 #[derive(Debug)]
