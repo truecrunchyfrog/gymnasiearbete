@@ -13,7 +13,7 @@ use crate::docker::build_image::{self, get_image};
 use crate::docker::common::image_exists;
 use crate::schema::files::id;
 use bollard::container::{
-    Config, CreateContainerOptions, LogOutput, LogsOptions, StartContainerOptions,
+    Config, CreateContainerOptions, LogOutput, LogsOptions, StartContainerOptions, Stats,
     StopContainerOptions, WaitContainerOptions,
 };
 use bollard::container::{DownloadFromContainerOptions, UploadToContainerOptions};
@@ -27,6 +27,7 @@ use crate::docker::profiles::{ContainerPreset, COMPILER_PRESET};
 
 use super::common::create_targz_archive;
 use super::profiles::HELLO_WORLD_PRESET;
+use bollard::container::StatsOptions;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use maplit::hashmap;
@@ -199,6 +200,9 @@ pub async fn gcc_container(
         ..Default::default()
     };
 
+    let container_stats = get_container_stats(&docker, &container_id).await?;
+    info!("{:?}", container_stats);
+
     let _ = docker.wait_container(&container_id, Some(wait_options));
 
     let container_logs = get_logs(&docker, preset).await?;
@@ -306,6 +310,23 @@ pub async fn run_preset(
     };
 
     Ok(output)
+}
+
+pub async fn get_container_stats(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<Stats, bollard::errors::Error> {
+    let options = Some(StatsOptions {
+        stream: true,
+        one_shot: false,
+    });
+    let stats = docker
+        .stats(container_id, options)
+        .into_stream()
+        .next()
+        .await
+        .unwrap()?;
+    Ok(stats)
 }
 
 pub async fn get_metrics(
