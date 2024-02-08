@@ -4,6 +4,7 @@ use bollard::service::{ExecConfig, Mount, MountVolumeOptions};
 use futures::TryStreamExt;
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::string;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::StreamExt;
@@ -99,15 +100,16 @@ async fn copy_file_into_container(
     docker: &Docker,
     container_id: &str,
     file: File,
-    destination: &str,
+    destination: &Path,
 ) -> Result<(), anyhow::Error> {
+    let file_name = destination.file_name().unwrap().to_str().unwrap();
+
     let options = Some(UploadToContainerOptions {
-        path: destination,
+        path: destination.to_str().unwrap(),
         ..Default::default()
     });
 
-    let test_path = "./example.c";
-    let archive = create_targz_archive(test_path).await?;
+    let archive = create_targz_archive(file, file_name, "archive.tar.gz").await?;
 
     docker
         .upload_to_container(container_id, options, archive.into())
@@ -133,23 +135,6 @@ async fn remove_container(
     // Stop and remove the container
     let _ = docker.stop_container(container_id, None).await?;
     let _ = docker.remove_container(container_id, None).await?;
-    Ok(())
-}
-
-pub async fn hello_world_container_test() -> Result<(), bollard::errors::Error> {
-    // Connect to the local Docker daemon
-    let docker = Docker::connect_with_local_defaults()?;
-    let preset = HELLO_WORLD_PRESET;
-
-    remove_old_container(&docker, "hello-world").await?;
-
-    let container_id = create_container(&docker, preset).await?;
-    start_container(&docker, &container_id).await?;
-    let logs = get_logs(&docker, preset).await?;
-
-    stop_container(&docker, &container_id).await?;
-    remove_container(&docker, &container_id).await?;
-
     Ok(())
 }
 
@@ -203,11 +188,9 @@ pub async fn gcc_container(
 
     let container_id = create_container(&docker, preset).await?;
 
-    info!("Copying file into container");
+    let destination_path: &Path = Path::new("/program.c");
 
-    let _ = copy_file_into_container(&docker, &container_id, source_file, "/").await?;
-
-    info!("Starting container");
+    let _ = copy_file_into_container(&docker, &container_id, source_file, destination_path).await?;
 
     let _ = start_container(&docker, &container_id).await?;
 
@@ -216,25 +199,21 @@ pub async fn gcc_container(
         ..Default::default()
     };
 
-    info!("Waiting for container to finish");
-
     let _ = docker.wait_container(&container_id, Some(wait_options));
-
-    info!("Executing command in container");
 
     let container_logs = get_logs(&docker, preset).await?;
 
     // Print logs
-    println!("{:?}", container_logs);
+    info!("{:?}", container_logs);
 
-    let binary_file_bytes = get_file_from_container(&docker, &container_id, "/example.o").await?;
+    let archive_bytes = get_file_from_container(&docker, &container_id, "/example.o").await?;
 
     let _ = stop_container(&docker, &container_id).await?;
 
     // Check length of binary file
-    println!("Length of binary file: {}", binary_file_bytes.len());
+    info!("Length of binary file: {}", archive_bytes.len());
     // Fail if the binary file is empty
-    if binary_file_bytes.is_empty() {
+    if archive_bytes.is_empty() {
         panic!("Binary file is empty");
     }
 
@@ -243,14 +222,15 @@ pub async fn gcc_container(
         logs: container_logs,
         id: container_id,
         exit_code: 0,
+        metrics: None,
     };
 
     info!("{:?}", output);
 
-    let mut binary_file: File = File::create("program.tar.gz").await?;
-    binary_file.write_all(&binary_file_bytes).await?;
+    let mut archive_file: File = File::create("archive.tar.gz").await?;
+    archive_file.write_all(&archive_bytes).await?;
 
-    Ok(binary_file)
+    Ok(archive_file)
 }
 
 pub async fn send_stdin_to_container(
@@ -267,7 +247,7 @@ pub async fn send_stdin_to_container(
 }
 
 pub async fn run_preset(
-    file: &mut File,
+    file: File,
     preset: impl ContainerPreset + std::marker::Copy,
 ) -> Result<ContainerOutput, anyhow::Error> {
     let docker = Docker::connect_with_local_defaults()?;
@@ -286,18 +266,10 @@ pub async fn run_preset(
 
     let container_id = create_container(&docker, preset).await?;
 
-    // Create a tempdir to store the source file
-    let temp_dir = TempDir::new("app").expect("Failed to create tempdir");
-
-    // Write file into tempdir
-    let mut tmp_file = File::create(temp_dir.path().join("program.o")).await?;
-
-    // write file into tmp_file
-    tokio::io::copy(file, &mut tmp_file).await?;
-
     info!("Copying file into container");
 
-    let _ = copy_file_into_container(&docker, &container_id, tmp_file, "/").await?;
+    let destination_path: &Path = Path::new("/program.o");
+    let _ = copy_file_into_container(&docker, &container_id, file, destination_path).await?;
 
     info!("Starting container");
 
@@ -309,7 +281,12 @@ pub async fn run_preset(
 
     info!("Executing command in container");
 
-    let _ = exec_in_container(&docker, &container_id, vec!["/app/program.o"]).await?;
+    let _ = exec_in_container(
+        &docker,
+        &container_id,
+        vec![destination_path.to_str().unwrap()],
+    )
+    .await?;
 
     info!("Getting logs from container");
 
@@ -325,9 +302,50 @@ pub async fn run_preset(
         logs: container_logs,
         id: container_id,
         exit_code: 0,
+        metrics: None,
     };
 
     Ok(output)
+}
+
+pub async fn get_metrics(
+    docker: &Docker,
+    container_id: &str,
+) -> Result<Metrics, bollard::errors::Error> {
+    let stats = docker
+        .stats(container_id, None)
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let mut cpu_user = 0.0;
+    let mut cpu_system = 0.0;
+    let mut memory = 0.0;
+
+    for stat in stats {
+        let cpu_stats = stat.cpu_stats;
+        let memory_stats = stat.memory_stats;
+
+        let cpu_usage = cpu_stats.cpu_usage.total_usage as f64;
+        let system_cpu_usage = cpu_stats.system_cpu_usage.unwrap() as f64;
+        let memory_usage = memory_stats.usage.unwrap() as f64;
+
+        cpu_user = cpu_usage / system_cpu_usage * 100.0;
+        cpu_system = system_cpu_usage / system_cpu_usage * 100.0;
+        memory = memory_usage / memory_stats.limit.unwrap() as f64 * 100.0;
+    }
+
+    Ok(Metrics {
+        cpu_user,
+        cpu_system,
+        memory,
+    })
+}
+
+#[derive(Debug)]
+pub struct Metrics {
+    pub cpu_user: f64,
+    pub cpu_system: f64,
+    pub memory: f64,
 }
 
 #[derive(Debug)]
@@ -335,4 +353,5 @@ pub struct ContainerOutput {
     pub logs: Vec<LogOutput>,
     pub id: String,
     pub exit_code: i64,
+    pub metrics: Option<Metrics>,
 }

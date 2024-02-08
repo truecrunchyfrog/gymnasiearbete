@@ -7,7 +7,7 @@ use crate::{
     database::connection::get_file_from_id,
     docker::{
         api::{gcc_container, ContainerOutput},
-        common::print_containers,
+        common::{extract_file_from_targz_archive, print_containers},
         profiles::{CodeRunnerPreset, CODE_RUNNER_PRESET, COMPILER_PRESET, HELLO_WORLD_PRESET},
     },
     Result,
@@ -20,6 +20,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tempfile::tempfile;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -30,41 +31,37 @@ use crate::{ctx::Ctx, docker::api::run_preset, schema::session_tokens::user_uuid
 
 pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
     // Create the file outside the loop
-    let mut file: File = File::create("/tmp/tempfile").await.unwrap();
+    let mut file = tempfile().expect("Failed to create a temporary file");
 
     while let Some(mut field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
 
         // Write data to the file
-        file.write_all(&data).await.unwrap();
-        file.sync_all().await.unwrap();
+        file.write_all(&data).expect("Failed to write to file");
+        file.sync_all().expect("Failed to sync file");
 
-        // For example, if you only want to process the first field, you can break here
         break;
     }
 
-    // Close the file after processing
-    drop(file);
-
-    // Open the file for reading
-    let mut file_reader = File::open("/tmp/tempfile").await.unwrap();
-
-    // Read contents of the file as bytes
-    let mut contents = Vec::new();
-    file_reader.read_to_end(&mut contents).await.unwrap();
-
-    // Convert the contents to a string and print it
-    if let Ok(file_content) = String::from_utf8(contents) {
-        println!("File Contents: {}", file_content);
-    } else {
-        println!("Unable to convert file contents to UTF-8");
-    }
-
-    let artifact = build_file(file_reader).await.map_err(|e| {
+    let mut artifact_file = build_file(File::from_std(file)).await.map_err(|e| {
         error!("Failed to build file: {}", e);
         Error::InternalServerError
     })?;
+
+    // Make sure that the file is not empty
+    let mut file_content = extract_file_from_targz_archive(artifact_file, "program.o")
+        .await
+        .expect("Failed to extract file from archive");
+
+    let mut file = File::from_std(tempfile().expect("Failed to create a temporary file"));
+    file.write_all(&file_content)
+        .await
+        .expect("Failed to write to file");
+
+    let output = run_file(file).await?;
+
+    info!("Output: {:?}", output);
 
     let json = Json(json!({
         "message": "Successfully uploaded file",
@@ -74,7 +71,7 @@ pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
     Ok(json)
 }
 
-pub async fn run_file(file: &mut File) -> Result<ContainerOutput> {
+pub async fn run_file(file: File) -> Result<ContainerOutput> {
     let preset = CODE_RUNNER_PRESET;
     let status = run_preset(file, preset).await.map_err(|e| {
         error!("Failed to run file: {}", e);
@@ -84,10 +81,10 @@ pub async fn run_file(file: &mut File) -> Result<ContainerOutput> {
 }
 
 pub async fn build_file(file: File) -> Result<File> {
-    let preset = COMPILER_PRESET;
+    let preset: crate::docker::profiles::CompilerPreset = COMPILER_PRESET;
 
     let mut bin = gcc_container(file, preset).await.map_err(|e| {
-        println!("Failed to build file: {}", e);
+        error!("Failed to build file: {}", e);
         Error::InternalServerError
     })?;
 

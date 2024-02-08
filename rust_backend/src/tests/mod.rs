@@ -13,6 +13,10 @@ use tower_cookies::CookieManagerLayer;
 mod api_tests {
     use diesel::r2d2::R2D2Connection;
     use hyper::server::conn;
+    use tempfile::{tempfile, NamedTempFile};
+    use tokio::{fs::File, io::AsyncWriteExt};
+
+    use crate::docker::common::create_targz_archive;
 
     use super::*;
 
@@ -50,5 +54,33 @@ mod api_tests {
         let mut conn = establish_connection();
         let s = conn.ping();
         assert_eq!(s.is_ok(), true);
+    }
+
+    #[tokio::test]
+    async fn test_create_targz_archive() {
+        // Create a temporary file and write some content to it
+        let temp_file = tempfile().expect("Failed to create a temporary file");
+
+        let content = b"Hello, world!";
+
+        let mut temp_file = File::from_std(temp_file);
+
+        temp_file
+            .write_all(content)
+            .await
+            .expect("Failed to write to file");
+
+        // Call the function to create a tar.gz archive
+        let result = create_targz_archive(temp_file, "file", "archive").await;
+
+        // Assert that the function call was successful
+        assert!(result.is_ok());
+
+        // Additional assertions based on your requirements
+        // For example, you might want to check the size of the generated archive
+        let archive_content = result.expect("Failed to get archive content");
+        assert!(archive_content.len() > 0);
+
+        // Clean up: The temporary file will be deleted when 'temp_file' goes out of scope
     }
 }

@@ -1,104 +1,80 @@
 use std::{io::Write, path::Path};
 
-use tempfile::NamedTempFile;
+use tempfile::tempfile;
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt},
+};
+
+use crate::api::run_code::{self, build_file, run_file};
 
 pub struct PingPong {
-    pub game_bin_path: String,
-    pub player_bin: i32,
+    pub submited_code: File,
+    pub result: String,
+    pub answer: String,
 }
 
 pub trait GameLogic {
-    async fn start(&self) {}
+    async fn start(self);
+    async fn setup(&self);
+    async fn verify(&self) -> bool;
+    async fn run(&mut self) -> String;
 }
 
 impl PingPong {
-    pub fn new(player: i32) -> Self {
+    pub async fn new(player: i32) -> Self {
         Self {
-            game_bin_path: "./rust_server/demo_code/program.o".to_string(),
-            player_bin: player,
+            // Load example.c from disk
+            submited_code: File::open("example.c").await.unwrap(),
+
+            answer: "Correct".to_string(),
+            result: "".to_string(),
         }
     }
-}
-
-fn path_to_tmp_file(path: &str) -> Result<NamedTempFile, anyhow::Error> {
-    let mut tmp_file = match NamedTempFile::new() {
-        Ok(o) => o,
-        Err(e) => {
-            println!("Failed to create tempfile: {}", e);
-            return Err(anyhow::anyhow!("Failed to create tempfile"));
-        }
-    };
-    let test_file_content = match std::fs::read(path) {
-        Ok(o) => o,
-        Err(e) => {
-            println!("Failed to read file: {}", e);
-            return Err(anyhow::anyhow!("Failed to read file"));
-        }
-    };
-    // Write into tmpfile
-    match tmp_file.write_all(&test_file_content) {
-        Ok(o) => o,
-        Err(e) => {
-            println!("Failed to write to tmpfile: {}", e);
-            return Err(anyhow::anyhow!("Failed to write to tmpfile"));
-        }
-    };
-    Ok(tmp_file)
 }
 
 impl GameLogic for PingPong {
-    async fn start(&self) {
-        println!("Game started");
-        // Steps
-        // 1. Start the game bin in a container
-        // 2. Get the first output from the container,
-        // 3. Start the player container,
-        // 4. Send the output to the player container,
-        // 5. Get the output from the player container,
-        // 6. Send the output to the game container,
-        // 7. Repeat steps 2-6 until the game is over.
+    async fn start(mut self) {
+        self.setup().await;
+        self.result = self.run().await;
+        let won = self.verify().await;
+        info!("Game won: {}", won);
+    }
+    async fn setup(&self) {}
+    async fn verify(&self) -> bool {
+        self.answer == self.result
+    }
+    async fn run(&mut self) -> String {
+        let mut code_file: File =
+            File::from_std(tempfile().expect("Failed to create a temporary file"));
+        // Write the content of the file to the temporary file
+        let mut content = Vec::new();
+        self.submited_code
+            .read_to_end(&mut content)
+            .await
+            .expect("Failed to read file");
+        code_file
+            .write_all(&content)
+            .await
+            .expect("Failed to write to file");
 
-        todo!("Implement the game logic"); /*
+        let artifact = build_file(code_file).await.unwrap();
+        let mut file_content =
+            crate::docker::common::extract_file_from_targz_archive(artifact, "program.o")
+                .await
+                .expect("Failed to extract file from archive");
+        let mut file: File = File::from_std(tempfile().expect("Failed to create a temporary file"));
+        file.write_all(&file_content)
+            .await
+            .expect("Failed to write to file");
+        let output = run_file(file).await.unwrap();
 
-                                           // load file into named temp file
-                                           let tmp_file = match path_to_tmp_file(self.game_bin_path.as_str()) {
-                                               Ok(o) => o,
-                                               Err(e) => {
-                                                   println!("Failed to create tempfile: {}", e);
-                                                   return;
-                                               }
-                                           };
+        info!("Metrics: {:?}", output.metrics);
 
-                                           let output = match setup_game_container(tmp_file).await {
-                                               Ok(o) => o,
-                                               Err(e) => {
-                                                   println!("Failed to start game container: {}", e);
-                                                   return;
-                                               }
-                                           };
-                                           println!("Output: {}", output);
-
-                                           let example_player = "./rust_server/demo_code/program.o";
-                                           // Start player container
-                                           let user_file = match path_to_tmp_file(example_player) {
-                                               Ok(o) => o,
-                                               Err(e) => {
-                                                   println!("Failed to create tempfile: {}", e);
-                                                   return;
-                                               }
-                                           };
-                                           let output = match run_user_bin(user_file.as_file(), output).await {
-                                               Ok(o) => o,
-                                               Err(e) => {
-                                                   println!("Failed to start user container: {}", e);
-                                                   return;
-                                               }
-                                           };
-                                           println!("Output: {}", output);
-                                           */
+        return output.logs.last().unwrap().to_string();
     }
 }
 
-pub fn start_game<T: GameLogic>(game: &T) {
+pub async fn start_game<T: GameLogic>(game: T) {
     T::start(game);
 }

@@ -54,8 +54,8 @@ pub fn check_docker_socket() -> bool {
 async fn startup_checks() -> Result<()> {
     info!("Initializing");
 
-    let mut game = simulation::sim::PingPong::new(1);
-    simulation::sim::start_game(&game);
+    let mut game = simulation::sim::PingPong::new(1).await;
+    simulation::sim::start_game(game).await;
 
     #[cfg(not(unix))]
     {
