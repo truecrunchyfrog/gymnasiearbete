@@ -1,24 +1,37 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
-use reqwest::{cookie::Jar, multipart::{self, Part}, Client, Url};
+use lazy_static::lazy_static;
+use reqwest::{
+    cookie::Jar,
+    multipart::{self, Part},
+    Client, Url,
+};
 use rocket::{
-    form::Form, fs::{NamedFile, TempFile}, http::{Cookie, CookieJar, Status}, request::{FromRequest, Outcome}, response::Redirect, serde::{Serialize, Deserialize}, tokio::io::AsyncReadExt
+    form::Form,
+    fs::{NamedFile, TempFile},
+    http::{Cookie, CookieJar, Status},
+    request::{FromRequest, Outcome},
+    response::Redirect,
+    serde::{Deserialize, Serialize},
+    tokio::io::AsyncReadExt,
 };
 use rocket_dyn_templates::{context, Template};
-use std::{collections::HashMap, env, path::{Path, PathBuf}};
-use lazy_static::lazy_static;
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+};
 
 lazy_static! {
-    static ref API_ENDPOINT_URL: String =
-        env::var("API_ENDPOINT_URL")
-        .expect("missing environment variable: API_ENDPOINT_URL");
+    static ref API_ENDPOINT_URL: String = env::var("API_ENDPOINT_URL").expect("Failed to read env");
 }
 
 #[derive(FromForm, Serialize)]
 #[serde(crate = "rocket::serde")]
 struct UsernamePasswordForm<'r> {
     username: &'r str,
-    password: &'r str
+    password: &'r str,
 }
 
 #[derive(Debug)]
@@ -33,7 +46,7 @@ struct User {
     created_at: Option<String>,
     last_login_at: Option<String>,
     login_count: Option<u32>,
-    is_admin: Option<bool>
+    is_admin: Option<bool>,
 }
 
 #[rocket::async_trait]
@@ -44,13 +57,16 @@ impl<'r> FromRequest<'r> for User {
         match req.cookies().get("sessionToken") {
             Some(session) => {
                 let response = client_with_token(session.to_string())
-                .get(api_url("profile"))
-                .send().await.unwrap();
+                    .get(api_url("profile"))
+                    .send()
+                    .await
+                    .unwrap();
+                println!("{:?}", response);
 
                 Outcome::Success(response.json::<User>().await.unwrap())
             }
 
-            _ => Outcome::Forward(Status::Unauthorized)
+            _ => Outcome::Forward(Status::Unauthorized),
         }
     }
 }
@@ -61,11 +77,15 @@ fn api_url(endpoint_path: &str) -> String {
 
 fn client_with_token(token_cookie: String) -> Client {
     let jar = Jar::default();
-    jar.add_cookie_str(&("auth_token=".to_owned() + &token_cookie), &API_ENDPOINT_URL.parse::<Url>().unwrap());
+    jar.add_cookie_str(
+        &("auth_token=".to_owned() + &token_cookie),
+        &API_ENDPOINT_URL.parse::<Url>().unwrap(),
+    );
 
     reqwest::ClientBuilder::new()
-    .cookie_provider(jar.into())
-    .build().unwrap()
+        .cookie_provider(jar.into())
+        .build()
+        .unwrap()
 }
 
 #[get("/")]
@@ -96,7 +116,7 @@ fn login(m: Option<&str>, t: Option<u8>) -> Template {
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
 struct ApiResultContainer<Inner> {
-    result: Inner
+    result: Inner,
 }
 
 #[derive(Deserialize)]
@@ -105,19 +125,29 @@ struct ApiLoginResponse {
     success: bool,
     // token: Option<String>,
     cookie: Option<String>,
-    reason: Option<String>
+    reason: Option<String>,
 }
 
 #[post("/login", data = "<form>")]
 async fn do_login(form: Form<UsernamePasswordForm<'_>>, cookies: &CookieJar<'_>) -> Redirect {
-    let response = reqwest::Client::new().post(api_url("login"))
-    .json(&*form)
-    .send().await.unwrap();
+    let response = reqwest::Client::new()
+        .post(api_url("login"))
+        .json(&*form)
+        .send()
+        .await
+        .unwrap();
 
-    let response_json = response.json::<ApiResultContainer<ApiLoginResponse>>().await.unwrap().result;
+    let response_json = response
+        .json::<ApiResultContainer<ApiLoginResponse>>()
+        .await
+        .unwrap()
+        .result;
 
     if !response_json.success {
-        return Redirect::to(uri!(login(Some(response_json.reason.unwrap().to_lowercase()), Some(1))))
+        return Redirect::to(uri!(login(
+            Some(response_json.reason.unwrap().to_lowercase()),
+            Some(1)
+        )));
     }
 
     cookies.add(Cookie::parse(response_json.cookie.unwrap()).unwrap());
@@ -147,31 +177,38 @@ fn register(e: Option<&str>) -> Template {
 struct ApiRegisterResponse {
     success: bool,
     // uuid: Option<String>,
-    reason: Option<String>
+    reason: Option<String>,
 }
 
 #[post("/register", data = "<form>")]
 async fn do_register(form: Form<UsernamePasswordForm<'_>>) -> Redirect {
-    let response = reqwest::Client::new().post(api_url("register"))
-    .json(&*form)
-    .send().await.unwrap();
+    let response = reqwest::Client::new()
+        .post(api_url("register"))
+        .json(&*form)
+        .send()
+        .await
+        .unwrap();
 
-    let response_json =
-        response.json::<ApiResultContainer<ApiRegisterResponse>>()
-        .await.unwrap().result;
+    let response_json = response
+        .json::<ApiResultContainer<ApiRegisterResponse>>()
+        .await
+        .unwrap()
+        .result;
 
     if !response_json.success {
-        return Redirect::to(uri!(
-            register(Some(response_json.reason.unwrap().to_lowercase()))
-        ))
+        return Redirect::to(uri!(register(Some(
+            response_json.reason.unwrap().to_lowercase()
+        ))));
     }
 
-    Redirect::to(uri!(login(Some(
-        format!(
+    Redirect::to(uri!(login(
+        Some(format!(
             "your account has been created and you may now log in. welcome, {}!",
-            form.username)), Some(0))))
+            form.username
+        )),
+        Some(0)
+    )))
 }
-
 
 #[get("/submit-program?<e>")]
 fn submit_program(user: User, e: Option<&str>) -> Template {
@@ -180,52 +217,64 @@ fn submit_program(user: User, e: Option<&str>) -> Template {
 
 #[derive(FromForm)]
 struct SubmitProgramForm<'r> {
-    file: TempFile<'r>
+    file: TempFile<'r>,
 }
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
 struct ApiSubmitProgram {
-    status: String
+    status: String,
 }
 
 #[post("/submit-program", data = "<in_form>")]
-async fn do_submit_program(_user: User, cookies: &CookieJar<'_>, in_form: Form<SubmitProgramForm<'_>>) -> Redirect {
+async fn do_submit_program(
+    _user: User,
+    cookies: &CookieJar<'_>,
+    in_form: Form<SubmitProgramForm<'_>>,
+) -> Redirect {
     let mut buf = Vec::new();
-    in_form.file.open()
-        .await.unwrap()
+    in_form
+        .file
+        .open()
+        .await
+        .unwrap()
         .read_to_end(&mut buf)
-        .await.unwrap();
+        .await
+        .unwrap();
 
-    let out_form = multipart::Form::new()
-        .part("file", Part::bytes(buf).file_name(in_form.file.name().unwrap_or("program").to_owned()));
+    let out_form = multipart::Form::new().part(
+        "file",
+        Part::bytes(buf).file_name(in_form.file.name().unwrap_or("program").to_owned()),
+    );
 
-    let response = client_with_token(cookies.get("sessionToken")
-        .unwrap().to_string())
+    let response = client_with_token(cookies.get("sessionToken").unwrap().to_string())
         .post(api_url("upload"))
         .multipart(out_form)
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     let response_json = response.json::<ApiSubmitProgram>().await.unwrap();
 
     Redirect::to(match response_json.status.as_str() {
         "success" => uri!(index),
-        _ => uri!(submit_program(Some("server declined binary")))
+        _ => uri!(submit_program(Some("server declined binary"))),
     })
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 struct ApiFileItem {
-    file_id: String
+    file_id: String,
 }
 
 #[get("/my-submissions?<s>")]
 async fn list_submissions(user: User, cookies: &CookieJar<'_>, s: Option<bool>) -> Template {
-    let response = client_with_token(cookies.get("sessionToken")
-        .unwrap().to_string())
+    let response = client_with_token(cookies.get("sessionToken").unwrap().to_string())
         .get(api_url("files"))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     let files = response.json::<Vec<ApiFileItem>>().await.unwrap();
 
@@ -249,15 +298,24 @@ fn not_found() -> Template {
 #[launch]
 fn rocket() -> _ {
     rocket::build()
-        .mount("/", routes![
-            index, logged_out,
-            static_file,
-            login, do_login, already_logged_in,
-            do_log_out,
-            register, do_register, already_reg_and_logged_in,
-            submit_program, do_submit_program,
-            list_submissions
-        ])
-        .register("/", catchers![ not_found, internal_error ])
+        .mount(
+            "/",
+            routes![
+                index,
+                logged_out,
+                static_file,
+                login,
+                do_login,
+                already_logged_in,
+                do_log_out,
+                register,
+                do_register,
+                already_reg_and_logged_in,
+                submit_program,
+                do_submit_program,
+                list_submissions
+            ],
+        )
+        .register("/", catchers![not_found, internal_error])
         .attach(Template::fairing())
 }

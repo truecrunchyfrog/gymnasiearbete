@@ -100,5 +100,11 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
 // This is stupid, but it's a placeholder for now.
 #[allow(clippy::needless_pass_by_value)]
 fn parse_token(token: String) -> Result<(String)> {
-    Ok(token)
+    if let Some(index) = token.find('=') {
+        // Return the substring after the '=' sign
+        Ok((&token[index + 1..]).to_string())
+    } else {
+        // Return the original string if '=' is not found
+        Ok(token)
+    }
 }
