@@ -5,12 +5,12 @@ use futures::TryStreamExt;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::string;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{default, string};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio_stream::StreamExt;
 
 use crate::docker::build_image::{self, get_image};
-use crate::docker::common::image_exists;
+use crate::docker::common::{extract_file_from_tar_archive, image_exists};
 use crate::schema::files::id;
 use bollard::container::{
     Config, CreateContainerOptions, LogOutput, LogsOptions, StartContainerOptions, Stats,
@@ -52,8 +52,7 @@ async fn create_container(
 ) -> Result<String, bollard::errors::Error> {
     info!("Creating container");
 
-    let config = preset.container_config();
-    info!("Config: {:?}", config);
+    let mut config = preset.container_config();
 
     let container = docker.create_container(Some(preset.create_options()), config);
     let container_id = match container.await {
@@ -65,13 +64,17 @@ async fn create_container(
 
 async fn remove_old_container(
     docker: &Docker,
-    container_id: &str,
+    container_name: &str,
 ) -> Result<(), bollard::errors::Error> {
     //Check if the container exists
-    let container_exists = docker.inspect_container(container_id, None).await;
+    let container_exists = docker.inspect_container(container_name, None).await;
+
+    // Stop if running
+    let _ = docker.stop_container(container_name, None).await;
+
     //Remove it if it exists
     if container_exists.is_ok() {
-        docker.remove_container(container_id, None).await?;
+        docker.remove_container(container_name, None).await?;
     }
     Ok(())
 }
@@ -82,35 +85,37 @@ async fn get_logs(
 ) -> Result<Vec<LogOutput>, bollard::errors::Error> {
     let container_name = preset.info().name;
 
-    let options = LogsOptions {
-        follow: true,
-        stdout: true,
-        stderr: true,
-        ..preset.logs_options()
-    };
+    let options = preset.logs_options();
 
+    // Get logs from stopped container
     let logs = docker
         .logs(&container_name, Some(options))
-        .into_stream()
         .try_collect::<Vec<_>>()
         .await?;
+
     Ok(logs)
 }
 
 async fn copy_file_into_container(
     docker: &Docker,
     container_id: &str,
-    file: File,
+    mut file: File,
     destination: &Path,
 ) -> Result<(), anyhow::Error> {
     let file_name = destination.file_name().unwrap().to_str().unwrap();
 
+    let mut dest = destination.to_path_buf();
+    dest.pop();
+
     let options = Some(UploadToContainerOptions {
-        path: destination.to_str().unwrap(),
+        path: dest.to_str().unwrap(),
         ..Default::default()
     });
 
-    let archive = create_targz_archive(file, file_name, "archive.tar.gz").await?;
+    let archive = create_targz_archive(file, file_name).await?;
+
+    // Assert that archive is not empty
+    assert!(!archive.is_empty());
 
     docker
         .upload_to_container(container_id, options, archive.into())
@@ -189,11 +194,17 @@ pub async fn gcc_container(
 
     let container_id = create_container(&docker, preset).await?;
 
-    let destination_path: &Path = Path::new("/program.c");
+    let destination_path: &Path = Path::new("/example.c");
 
-    let _ = copy_file_into_container(&docker, &container_id, source_file, destination_path).await?;
+    info!("Copying file into container");
+
+    let _ = copy_file_into_container(&docker, &container_id, source_file, destination_path)
+        .await
+        .expect("Failed to copy file into container");
 
     let _ = start_container(&docker, &container_id).await?;
+
+    info!("Waiting for container to finish");
 
     let wait_options = WaitContainerOptions {
         condition: "not-running",
@@ -201,27 +212,31 @@ pub async fn gcc_container(
     };
 
     let container_stats = get_container_stats(&docker, &container_id).await?;
-    info!("{:?}", container_stats);
+
+    // Wait for one second
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let _ = docker.wait_container(&container_id, Some(wait_options));
 
     let container_logs = get_logs(&docker, preset).await?;
 
     // Print logs
-    info!("{:?}", container_logs);
+    info!(
+        "{:?}",
+        container_logs
+            .iter()
+            .map(|log| log.to_string())
+            .collect::<Vec<String>>()
+    );
 
     let archive_bytes = get_file_from_container(&docker, &container_id, "/example.o").await?;
 
     let _ = stop_container(&docker, &container_id).await?;
 
-    // Check length of binary file
-    info!("Length of binary file: {}", archive_bytes.len());
-    // Fail if the binary file is empty
     if archive_bytes.is_empty() {
         panic!("Binary file is empty");
     }
 
-    //remove_container(&docker, &container_id).await?;
     let output = ContainerOutput {
         logs: container_logs,
         id: container_id,
@@ -229,12 +244,37 @@ pub async fn gcc_container(
         metrics: None,
     };
 
-    info!("{:?}", output);
-
-    let mut archive_file: File = File::create("archive.tar.gz").await?;
+    let mut archive_file: File = File::create("archive.tar").await?;
     archive_file.write_all(&archive_bytes).await?;
+    archive_file
+        .seek(std::io::SeekFrom::Start(0))
+        .await
+        .expect("Failed to seek file");
 
-    Ok(archive_file)
+    let mut archive_file: File =
+        File::from_std(tempfile().expect("Failed to create a temporary file"));
+    let mut buff = Vec::new();
+    // load file from disk
+    let mut file = File::open("archive.tar").await?;
+    file.read_to_end(&mut buff).await?;
+    archive_file.write_all(&buff).await?;
+
+    // Extract the file from the archive
+    let buff = extract_file_from_tar_archive(archive_file, "example.o")
+        .await
+        .expect("Failed to extract file from archive");
+
+    info!("File size: {}", buff.len());
+
+    let mut file = File::from_std(tempfile().expect("Failed to create a temporary file"));
+    file.write_all(&buff)
+        .await
+        .expect("Failed to write to file");
+    file.seek(std::io::SeekFrom::Start(0))
+        .await
+        .expect("Failed to seek file");
+
+    Ok(file)
 }
 
 pub async fn send_stdin_to_container(
@@ -259,48 +299,59 @@ pub async fn run_preset(
     let container_name = preset.info().name;
     let image_name = preset.info().image;
 
+    // Check if the image exists
     let image = match image_exists(&docker, &image_name).await? {
         true => docker.inspect_image(&image_name).await?,
         false => get_image(preset).await?,
     };
 
+    // Remove the old container
     remove_old_container(&docker, &container_name).await?;
 
-    info!("Creating container");
-
+    // Create a new container
     let container_id = create_container(&docker, preset).await?;
 
-    info!("Copying file into container");
-
+    // Copy the file into the container
     let destination_path: &Path = Path::new("/program.o");
     let _ = copy_file_into_container(&docker, &container_id, file, destination_path).await?;
 
-    info!("Starting container");
-
+    // Start the container
     let _ = start_container(&docker, &container_id).await?;
+
+    info!("Container started");
+
+    loop {
+        // Check if the container is running
+        let d = docker
+            .inspect_container(&container_id, None)
+            .await
+            .expect("Failed to inspect container");
+
+        match d.state {
+            Some(state) => {
+                if state.running.unwrap() {
+                    // Print container stats
+                    let stats = get_container_stats(&docker, &container_id).await?;
+                    info!("{:?}", stats.cpu_stats);
+                } else {
+                    break;
+                }
+            }
+            None => {
+                break;
+            }
+        }
+    }
 
     info!("Waiting for container to finish");
 
-    let _ = send_stdin_to_container(&docker, &container_id, preset.start_stdin()).await?;
-
-    info!("Executing command in container");
-
-    let _ = exec_in_container(
-        &docker,
-        &container_id,
-        vec![destination_path.to_str().unwrap()],
-    )
-    .await?;
-
-    info!("Getting logs from container");
-
+    // Wait for the container to finish
+    let container_stats = get_container_stats(&docker, &container_id).await?;
     let container_logs = get_logs(&docker, preset).await?;
+    //let metrics = get_metrics(&docker, &container_id).await?;
 
-    info!("Stopping container");
-
+    // Stop the container
     let _ = stop_container(&docker, &container_id).await?;
-
-    info!("{}", container_id);
 
     let output = ContainerOutput {
         logs: container_logs,
@@ -317,7 +368,7 @@ pub async fn get_container_stats(
     container_id: &str,
 ) -> Result<Stats, bollard::errors::Error> {
     let options = Some(StatsOptions {
-        stream: true,
+        stream: false,
         one_shot: false,
     });
     let stats = docker
@@ -333,14 +384,21 @@ pub async fn get_metrics(
     docker: &Docker,
     container_id: &str,
 ) -> Result<Metrics, bollard::errors::Error> {
+    let options = Some(StatsOptions {
+        stream: false,
+        one_shot: true,
+    });
+
     let stats = docker
-        .stats(container_id, None)
+        .stats(container_id, options)
         .try_collect::<Vec<_>>()
         .await?;
 
     let mut cpu_user = 0.0;
     let mut cpu_system = 0.0;
     let mut memory = 0.0;
+
+    info!("{:?}", stats);
 
     for stat in stats {
         let cpu_stats = stat.cpu_stats;

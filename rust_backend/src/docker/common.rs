@@ -4,15 +4,17 @@ use flate2::Compression;
 use std::io::prelude::*;
 use tar::Builder;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, bollard::errors::Error> {
     let images = docker.list_images::<&str>(None).await?;
     for img in images {
-        if img.repo_tags.contains(&image.to_string()) {
+        let img_name = img.repo_tags.get(0).unwrap().split(":").next().unwrap();
+        if img_name == image {
             return Ok(true);
         }
     }
+    info!("Image {} does not exist", image);
     Ok(false)
 }
 
@@ -26,15 +28,21 @@ pub async fn print_containers() -> Result<(), bollard::errors::Error> {
 }
 
 pub async fn create_targz_archive(
-    file: File,
+    mut file: File,
     filename: &str,
-    archive_name: &str,
 ) -> Result<Vec<u8>, anyhow::Error> {
+    file.seek(std::io::SeekFrom::Start(0))
+        .await
+        .expect("Failed to seek file");
+
     // Read the content of the file
     let mut content = Vec::new();
     file.take(u64::MAX.into()) // Read the entire content of the file
         .read_to_end(&mut content)
         .await?;
+
+    // Print the size of the file
+    info!("File size: {}", content.len());
 
     // Create a tar.gz archive
     let mut archive = Vec::new();
@@ -44,7 +52,9 @@ pub async fn create_targz_archive(
 
         // Add the file to the archive with the specified archive name
         let mut header = tar::Header::new_gnu();
-        header.set_path(archive_name)?;
+        header.set_path(filename)?;
+        // Make the file executable
+
         header.set_size(content.len() as u64);
         header.set_cksum();
         builder
@@ -55,17 +65,23 @@ pub async fn create_targz_archive(
     Ok(archive)
 }
 
-pub async fn extract_file_from_targz_archive(
-    archive: File,
+pub async fn extract_file_from_tar_archive(
+    mut archive: File,
     filename: &str,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let mut content = Vec::new();
+    // Seek back to the beginning of the file before reading its contents
     archive
-        .take(u64::MAX.into()) // Read the entire content of the file
-        .read_to_end(&mut content)
-        .await?;
+        .seek(std::io::SeekFrom::Start(0))
+        .await
+        .expect("Failed to seek file");
 
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(content.as_slice()));
+    // Read the entire content of the file into a buffer
+    let mut content = Vec::new();
+    archive.read_to_end(&mut content).await?;
+
+    // Create a new reader for the buffer
+    let mut archive = tar::Archive::new(content.as_slice());
+
     let mut file = Vec::new();
     for entry in archive.entries()? {
         let mut entry = entry?;
@@ -74,5 +90,6 @@ pub async fn extract_file_from_targz_archive(
             break;
         }
     }
+
     Ok(file)
 }
