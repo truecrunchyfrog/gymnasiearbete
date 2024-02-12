@@ -6,7 +6,7 @@ use tokio::time::Duration;
 
 use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
-use crate::api::run_code::build_and_run;
+use crate::api::run_code::{build_and_run, run_hello_world_test};
 use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
 use crate::tasks::start_task_thread;
 
@@ -54,11 +54,8 @@ pub fn check_docker_socket() -> bool {
 async fn startup_checks() -> Result<()> {
     info!("Initializing");
 
-    /*
-    let mut game = simulation::sim::PingPong::new(1).await;
-    simulation::sim::start_game(game).await;
-
-    */
+    // let mut game = simulation::sim::PingPong::new(1).await;
+    // simulation::sim::start_game(game).await;
 
     #[cfg(not(unix))]
     {

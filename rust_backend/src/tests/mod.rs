@@ -71,7 +71,7 @@ mod api_tests {
             .expect("Failed to write to file");
 
         // Call the function to create a tar.gz archive
-        let result = create_targz_archive(temp_file, "file", "archive").await;
+        let result = create_targz_archive(temp_file, "file").await;
 
         // Assert that the function call was successful
         assert!(result.is_ok());

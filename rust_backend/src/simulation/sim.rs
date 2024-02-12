@@ -60,7 +60,7 @@ impl GameLogic for PingPong {
 
         let artifact = build_file(code_file).await.unwrap();
         let mut file_content =
-            crate::docker::common::extract_file_from_targz_archive(artifact, "program.o")
+            crate::docker::common::extract_file_from_tar_archive(artifact, "program.o")
                 .await
                 .expect("Failed to extract file from archive");
         let mut file: File = File::from_std(tempfile().expect("Failed to create a temporary file"));

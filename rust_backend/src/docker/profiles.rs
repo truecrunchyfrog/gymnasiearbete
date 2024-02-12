@@ -35,7 +35,7 @@ pub trait ContainerPreset: Send + Sync {
     }
     fn logs_options(&self) -> LogsOptions<String> {
         LogsOptions {
-            follow: true,
+            follow: false,
             stdout: true,
             stderr: true,
             ..Default::default()
@@ -50,9 +50,9 @@ pub trait ContainerPreset: Send + Sync {
     }
     fn create_image_options(&self) -> CreateImageOptions<String> {
         CreateImageOptions {
-            from_image: "gcc".to_string(),
+            from_image: self.info().image,
             platform: "linux/amd64".to_string(),
-            tag: "latest".to_string(),
+            tag: self.info().tag,
             ..Default::default()
         }
     }
@@ -67,7 +67,7 @@ pub struct CodeRunnerPreset;
 impl ContainerPreset for CodeRunnerPreset {
     fn exec_options(&self) -> CreateExecOptions<String> {
         CreateExecOptions {
-            cmd: Some(vec!["ls".to_string()]),
+            cmd: Some(vec!["ls".to_string(), "-l".to_string()]),
             ..Default::default()
         }
     }
@@ -75,8 +75,20 @@ impl ContainerPreset for CodeRunnerPreset {
     fn info(&self) -> ContainerInfo {
         ContainerInfo {
             name: "code-runner".to_string(),
-            image: "alpine".to_string(),
+            image: "clearlinux".to_string(),
             tag: "latest".to_string(),
+        }
+    }
+    fn container_config(&self) -> Config<String> {
+        Config {
+            image: Some(self.info().image),
+            // Command we want to run: first chmod +x the file, then run it and output the result to stdout, the program is named program.o
+            entrypoint: Some(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "chmod +x ./program.o && ./program.o".to_string(),
+            ]),
+            ..Default::default()
         }
     }
 }
@@ -86,7 +98,7 @@ pub struct HelloWorldPreset;
 impl ContainerPreset for HelloWorldPreset {
     fn exec_options(&self) -> CreateExecOptions<String> {
         CreateExecOptions {
-            cmd: Some(vec!["".to_string()]),
+            cmd: Some(vec!["./program.o".to_string()]),
             ..Default::default()
         }
     }
@@ -98,6 +110,13 @@ impl ContainerPreset for HelloWorldPreset {
             tag: "latest".to_string(),
         }
     }
+    fn container_config(&self) -> Config<String> {
+        Config {
+            image: Some(self.info().image),
+            cmd: Some(vec!["sleep".to_string(), "5".to_string()]),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -106,9 +125,10 @@ impl ContainerPreset for CompilerPreset {
     fn exec_options(&self) -> CreateExecOptions<String> {
         CreateExecOptions {
             cmd: Some(vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                "echo 'Hello, world!'".to_string(),
+                "gcc".to_string(),
+                "./example.c".to_string(),
+                "-o".to_string(),
+                "example.o".to_string(),
             ]),
             ..Default::default()
         }
@@ -116,7 +136,7 @@ impl ContainerPreset for CompilerPreset {
 
     fn container_config(&self) -> Config<String> {
         Config {
-            image: Some("gcc".to_string()),
+            image: Some(self.info().image),
             cmd: Some(vec![
                 "gcc".to_string(),
                 "./example.c".to_string(),
