@@ -8,6 +8,7 @@ use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
 use crate::api::run_code::{build_and_run, run_hello_world_test};
 use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
+use crate::simulation::scoring::caluclate_score;
 use crate::tasks::start_task_thread;
 
 use axum::extract::{Path, Query};
@@ -75,6 +76,10 @@ async fn startup_checks() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let score = caluclate_score().await.expect("Failed");
+    println!("Score {}", score);
+    panic!();
+
     startup_checks().await?;
 
     env_logger::init();

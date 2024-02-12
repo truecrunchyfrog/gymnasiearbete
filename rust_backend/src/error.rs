@@ -27,6 +27,7 @@ pub enum Error {
     AuthFailInvalidToken,
 
     InternalServerError,
+    FailedToCalculateScore,
 
     // -- Model errors.
     TicketDeleteFailIdNotFound { id: u64 },

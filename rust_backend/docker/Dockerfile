@@ -1,20 +1,16 @@
-FROM debian:stable
+# Use a minimal Alpine Linux base image
+FROM alpine:latest
 
-# Update the package list and install gcc
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc g++ && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install required packages
+RUN apk --no-cache add \
+    bash \
+    coreutils \
+    procps \
+    perf \
+    smem
 
-# Create the destination directory for the compiled program
-RUN mkdir -p /app
+# Set the working directory
+WORKDIR /app
 
-# Copy the source code to the Docker container
-COPY ./code /src
-
-# Compile the code
-WORKDIR /src
-RUN gcc -o /app/program *.c
-
-# Set the entry point
-CMD ["/app/program"]
+# Define the entrypoint with the command
+ENTRYPOINT ["/bin/bash", "-c", "{ { time -f '{\"real\":%e,\"user\":%U,\"sys\":%S}' ./program.o ; } 2>&1 && perf stat -o perf_stats.json -e cpu-clock ./program.o ; } | smem -r -k -c 'pid pss' | awk 'NR==2{print \"\\\"peak_memory\\\":\" $3 }'"]
