@@ -28,7 +28,7 @@ pub async fn get_image(
             match message {
                 Ok(msg) => {
                     if (msg.progress.is_some()) {
-                        println!("{:?}", msg.progress);
+                        info!("{:?}", msg.progress);
                     }
                 }
                 Err(e) => {

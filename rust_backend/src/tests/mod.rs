@@ -32,7 +32,7 @@ mod api_tests {
         match axum_test::TestServer::new_with_config(app, config) {
             Ok(o) => o,
             Err(e) => {
-                println!("Failed to create test server: {}", e);
+                error!("Failed to create test server: {}", e);
                 panic!("Failed to create test server");
             }
         }
