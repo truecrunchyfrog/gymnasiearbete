@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::Json;
+use crate::{ctx::Ctx, docker::api::run_preset, schema::session_tokens::user_uuid, Error};
 use crate::{
     database::connection::get_file_from_id,
     docker::{
@@ -12,11 +14,11 @@ use crate::{
     },
     Result,
 };
+use argon2::password_hash::Output;
 use axum::{
     debug_handler,
     extract::{self, Multipart},
     http::StatusCode,
-    Json,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -27,8 +29,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use crate::{ctx::Ctx, docker::api::run_preset, schema::session_tokens::user_uuid, Error};
-
+#[debug_handler]
 pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Value>> {
     // Create the file outside the loop
     let mut file = File::from_std(tempfile().expect("Failed to create a temporary file"));

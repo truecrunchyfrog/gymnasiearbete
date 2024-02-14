@@ -9,13 +9,17 @@ pub mod sql_types {
 diesel::table! {
     files (id) {
         id -> Uuid,
+        #[max_length = 255]
+        file_name -> Varchar,
+        #[max_length = 255]
+        file_hash -> Varchar,
         file_size -> Int4,
         file_content -> Nullable<Bytea>,
         owner_uuid -> Uuid,
         #[max_length = 255]
         file_type -> Nullable<Varchar>,
-        created_at -> Nullable<Timestamptz>,
-        last_modified_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        last_modified_at -> Timestamptz,
         parent_id -> Nullable<Uuid>,
     }
 }
@@ -65,4 +69,9 @@ diesel::joinable!(files -> users (owner_uuid));
 diesel::joinable!(session_tokens -> users (user_uuid));
 diesel::joinable!(simulations -> files (ran_file_id));
 
-diesel::allow_tables_to_appear_in_same_query!(files, session_tokens, simulations, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    files,
+    session_tokens,
+    simulations,
+    users,
+);
