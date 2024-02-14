@@ -76,10 +76,6 @@ async fn startup_checks() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let score = caluclate_score().await.expect("Failed");
-    println!("Score {}", score);
-    panic!();
-
     startup_checks().await?;
 
     env_logger::init();
