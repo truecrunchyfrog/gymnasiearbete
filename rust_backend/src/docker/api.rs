@@ -376,7 +376,7 @@ pub async fn get_container_stats(
         .into_stream()
         .next()
         .await
-        .unwrap()?;
+        .expect("Failed to find")?;
     Ok(stats)
 }
 
@@ -405,12 +405,12 @@ pub async fn get_metrics(
         let memory_stats = stat.memory_stats;
 
         let cpu_usage = cpu_stats.cpu_usage.total_usage as f64;
-        let system_cpu_usage = cpu_stats.system_cpu_usage.unwrap() as f64;
-        let memory_usage = memory_stats.usage.unwrap() as f64;
+        let system_cpu_usage: f64 = cpu_stats.system_cpu_usage.expect("Not found") as f64;
+        let memory_usage = memory_stats.usage.expect("Not found") as f64;
 
         cpu_user = cpu_usage / system_cpu_usage * 100.0;
-        cpu_system = system_cpu_usage / system_cpu_usage * 100.0;
-        memory = memory_usage / memory_stats.limit.unwrap() as f64 * 100.0;
+        cpu_system = (system_cpu_usage / system_cpu_usage) * 100.0;
+        memory = memory_usage / memory_stats.limit.expect("Not found") as f64 * 100.0;
     }
 
     Ok(Metrics {

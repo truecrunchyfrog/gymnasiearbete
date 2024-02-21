@@ -102,7 +102,10 @@ async fn main() -> Result<()> {
         .await
         .expect("Failed to bind port");
 
-    println!("->> LISTENING on {:?}\n", listener.local_addr().unwrap());
+    println!(
+        "->> LISTENING on {:?}\n",
+        listener.local_addr().expect("Failed to get local address")
+    );
 
     axum::serve(listener, app.into_make_service())
         .await
