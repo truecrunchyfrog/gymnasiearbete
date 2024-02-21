@@ -3,7 +3,7 @@ use crate::Error;
 use anyhow;
 use easing;
 
-pub async fn caluclate_score() -> Result<u32, anyhow::Error> {
+pub async fn calculate_score() -> Result<u32, anyhow::Error> {
     let cpu_time: f64 = 0.2;
     let cpu_time_max: f64 = 1.0;
 

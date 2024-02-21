@@ -8,7 +8,7 @@ use crate::api::create_account::register_account;
 use crate::api::log_in::login_route;
 use crate::api::run_code::{build_and_run, run_hello_world_test};
 use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
-use crate::simulation::scoring::caluclate_score;
+use crate::simulation::scoring::calculate_score;
 use crate::tasks::start_task_thread;
 
 use axum::extract::{Path, Query};
@@ -76,13 +76,16 @@ async fn startup_checks() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let score = caluclate_score().await.expect("Failed");
-    println!("Score {}", score);
-    panic!();
+    env_logger::init();
+    docker::common::build_dockerfile().await;
+    panic!("This is a panic");
+    // Load file
+    let mut file = tokio::fs::File::open("./demo_code/pong.c").await.unwrap();
+
+    let mut game = simulation::sim::PingPong::new(file).await;
+    let _ = simulation::sim::GameLogic::start(game).await;
 
     startup_checks().await?;
-
-    env_logger::init();
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());

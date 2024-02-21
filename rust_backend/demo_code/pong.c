@@ -1,8 +1,7 @@
-#include <string.h>
-#include <stdlib.h>
+#include <stdio.h>
 
 int main()
 {
-    printf("ping\n");
+    printf("pong");
     return 0;
 }

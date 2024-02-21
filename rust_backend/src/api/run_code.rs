@@ -45,6 +45,27 @@ pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
         break;
     }
 
+    match run_build(file).await {
+        Ok(output) => {
+            let json = Json(json!({
+                "message": "Successfully uploaded file",
+                "status": "success",
+                "output": output.logs.last().unwrap().to_string().trim(),
+            }));
+            Ok(json)
+        }
+        Err(e) => {
+            error!("Failed to build and run file: {}", e);
+            let json = Json(json!({
+                "message": "failed to run program",
+                "status": "failed",
+            }));
+            Ok(json)
+        }
+    }
+}
+
+async fn run_build(mut file: File) -> Result<ContainerOutput> {
     file.seek(std::io::SeekFrom::Start(0))
         .await
         .expect("Failed to seek file");
@@ -54,19 +75,12 @@ pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
         Ok(file) => file,
         Err(e) => {
             error!("Failed to build file: {}", e);
-            return Err(Error::InternalServerError);
+            return Err(e);
         }
     };
 
     let output = run_file(artifact_file).await?;
-
-    let json = Json(json!({
-        "message": "Successfully uploaded file",
-        "status": "success",
-        "output": output.logs.last().unwrap().to_string().trim(),
-    }));
-
-    Ok(json)
+    Ok(output)
 }
 
 pub async fn run_hello_world_test() -> Result<()> {
