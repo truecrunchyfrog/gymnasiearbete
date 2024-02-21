@@ -13,6 +13,7 @@ pub struct ContainerInfo {
     pub name: String,
     pub image: String,
     pub tag: String,
+    pub remote: bool,
 }
 
 pub trait ContainerPreset: Send + Sync {
@@ -41,7 +42,12 @@ pub trait ContainerPreset: Send + Sync {
             ..Default::default()
         }
     }
-    fn exec_options(&self) -> CreateExecOptions<String>;
+    fn exec_options(&self) -> CreateExecOptions<String> {
+        CreateExecOptions {
+            cmd: Some(vec!["ls".to_string()]),
+            ..Default::default()
+        }
+    }
     fn create_options(&self) -> CreateContainerOptions<String> {
         CreateContainerOptions {
             name: self.info().name,
@@ -65,29 +71,19 @@ pub const CODE_RUNNER_PRESET: CodeRunnerPreset = CodeRunnerPreset;
 #[derive(Clone, Copy)]
 pub struct CodeRunnerPreset;
 impl ContainerPreset for CodeRunnerPreset {
-    fn exec_options(&self) -> CreateExecOptions<String> {
-        CreateExecOptions {
-            cmd: Some(vec!["ls".to_string(), "-l".to_string()]),
-            ..Default::default()
-        }
-    }
-
     fn info(&self) -> ContainerInfo {
         ContainerInfo {
             name: "code-runner".to_string(),
             image: "linuxkit/kernel-perf".to_string(),
             tag: "latest".to_string(),
+            remote: true,
         }
     }
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some(self.info().image),
             // Command we want to run: first chmod +x the file, then run it and output the result to stdout, the program is named program.o
-            entrypoint: Some(vec![
-                "sh".to_string(),
-                "-c".to_string(),
-                "chmod +x ./program.o && ./program.o".to_string(),
-            ]),
+            entrypoint: construct_command("sh -c 'chmod +x program.o && ./program.o'"),
             ..Default::default()
         }
     }
@@ -96,24 +92,18 @@ impl ContainerPreset for CodeRunnerPreset {
 #[derive(Clone, Copy)]
 pub struct HelloWorldPreset;
 impl ContainerPreset for HelloWorldPreset {
-    fn exec_options(&self) -> CreateExecOptions<String> {
-        CreateExecOptions {
-            cmd: Some(vec!["./program.o".to_string()]),
-            ..Default::default()
-        }
-    }
-
     fn info(&self) -> ContainerInfo {
         ContainerInfo {
             name: "hello-world".to_string(),
             image: "hello-world".to_string(),
             tag: "latest".to_string(),
+            remote: true,
         }
     }
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some(self.info().image),
-            cmd: Some(vec!["sleep".to_string(), "5".to_string()]),
+            cmd: construct_command("echo 'Hello, World!'"),
             ..Default::default()
         }
     }
@@ -122,27 +112,10 @@ impl ContainerPreset for HelloWorldPreset {
 #[derive(Clone, Copy)]
 pub struct CompilerPreset;
 impl ContainerPreset for CompilerPreset {
-    fn exec_options(&self) -> CreateExecOptions<String> {
-        CreateExecOptions {
-            cmd: Some(vec![
-                "gcc".to_string(),
-                "./example.c".to_string(),
-                "-o".to_string(),
-                "example.o".to_string(),
-            ]),
-            ..Default::default()
-        }
-    }
-
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some(self.info().image),
-            cmd: Some(vec![
-                "gcc".to_string(),
-                "./example.c".to_string(),
-                "-o".to_string(),
-                "example.o".to_string(),
-            ]),
+            cmd: construct_command("gcc example.c -o example.o"),
             ..Default::default()
         }
     }
@@ -152,6 +125,16 @@ impl ContainerPreset for CompilerPreset {
             name: "gcc".to_string(),
             image: "gcc".to_string(),
             tag: "latest".to_string(),
+            remote: true,
         }
     }
+}
+
+// Slice the input string into a vector of strings
+fn construct_command(input: &str) -> Option<Vec<String>> {
+    let mut command = input
+        .split_whitespace()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
+    Some(command)
 }

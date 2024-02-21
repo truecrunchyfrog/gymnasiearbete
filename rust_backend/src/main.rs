@@ -55,43 +55,30 @@ pub fn check_docker_socket() -> bool {
 async fn startup_checks() -> Result<()> {
     info!("Initializing");
 
-    // let mut game = simulation::sim::PingPong::new(1).await;
-    // simulation::sim::start_game(game).await;
-
     #[cfg(not(unix))]
-    {
-        warn!("Warning! Running on Windows. Docker will be unavailable!");
-    }
+    warn!("Warning! Running on Windows. Docker will be unavailable!");
 
     #[cfg(unix)]
-    {
-        if !check_docker_socket() {
-            warn!("Warning! Docker socket does not exist!");
-        }
+    if !check_docker_socket() {
+        warn!("Warning! Docker socket does not exist!");
     }
-    info!("Running database migrations");
+
+    debug!("Running database migrations");
     database::connection::run_migrations();
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Starts the logger
     env_logger::init();
-    docker::common::build_dockerfile().await;
-    panic!("This is a panic");
-    // Load file
-    let mut file = tokio::fs::File::open("./demo_code/pong.c").await.unwrap();
 
-    let mut game = simulation::sim::PingPong::new(file).await;
-    let _ = simulation::sim::GameLogic::start(game).await;
-
+    // Run checks
     startup_checks().await?;
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
     start_task_thread(task_manager.clone());
     let state = AppState { tm: task_manager };
-
-    // tracing_subscriber::fmt::init();
 
     info!("Starting axum router");
 
@@ -110,7 +97,7 @@ async fn main() -> Result<()> {
         .layer(CookieManagerLayer::new())
         .with_state(state);
 
-    // run our app with hyper, listening globally on port 3000
+    // Setup a TcpListener
     let listener = TcpListener::bind("127.0.0.1:3000")
         .await
         .expect("Failed to bind port");
