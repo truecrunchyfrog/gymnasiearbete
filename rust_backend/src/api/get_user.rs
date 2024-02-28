@@ -10,15 +10,15 @@ use super::root::get_token;
 pub async fn get_user_from_token(headers: HeaderMap) -> Result<User> {
     let token = match get_token(headers).await {
         Ok(t) => t,
-        Err(_) => return Err(Error::AuthFailTokenWrongFormat),
+        Err(_) => return Err(Error::AuthFailTokenWrongFormat.into()),
     };
 
     match get_token_owner(&token).await {
         Ok(Some(u)) => Ok(u),
-        Ok(None) => Err(Error::InternalServerError),
+        Ok(None) => Err(Error::InternalServerError.into()),
         Err(e) => {
             error!("Failed to get owner of token: {}", e);
-            Err(Error::InternalServerError)
+            Err(Error::InternalServerError.into())
         }
     }
 }

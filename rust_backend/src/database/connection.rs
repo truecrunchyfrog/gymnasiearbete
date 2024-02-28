@@ -98,7 +98,7 @@ pub async fn upload_file(file: File) -> Result<Uuid> {
         }
         Err(err) => {
             error!("Error inserting file: {}", err);
-            Err(Error::DatabaseConnectionFail)
+            Err(Error::DatabaseConnectionFail.into())
         }
     }
 }
@@ -123,7 +123,7 @@ pub async fn get_user_from_username(username_query: &str) -> Result<User> {
     users
         .filter(username.eq(username_query))
         .first::<User>(&mut conn)
-        .map_err(|_| Error::DatabaseConnectionFail)
+        .map_err(|_| Error::DatabaseConnectionFail.into())
 }
 
 #[derive(Clone)]
@@ -155,10 +155,10 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
     use crate::schema::users::dsl::{id, users};
     let mut conn = establish_connection();
 
-    users
+    Ok(users
         .filter(id.eq(user_id))
         .first::<User>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }
 
 // Get the user from the token, return a Result containing a Some(User) if the token is valid, None otherwise.
@@ -185,19 +185,19 @@ pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
     use crate::schema::files::dsl::{files, id, owner_uuid};
     let mut conn = establish_connection();
 
-    files
+    Ok(files
         .filter(owner_uuid.eq(user_id))
         .select(id)
         .load::<Uuid>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }
 
 pub async fn get_file_from_id(file_id: Uuid) -> Result<File> {
     use crate::schema::files::dsl::{files, id};
     let mut conn = establish_connection();
 
-    files
+    Ok(files
         .filter(id.eq(file_id))
         .first::<File>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }

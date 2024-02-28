@@ -52,18 +52,11 @@ impl GameLogic for PingPong {
     }
     async fn run(&mut self) -> Result<Option<String>, anyhow::Error> {
         info!("Running game");
-        let mut code_file: File =
-            File::from_std(tempfile().expect("Failed to create a temporary file"));
+        let mut code_file: File = File::from_std(tempfile()?);
         // Write the content of the file to the temporary file
         let mut content = Vec::new();
-        self.submitted_code
-            .read_to_end(&mut content)
-            .await
-            .expect("Failed to read file");
-        code_file
-            .write_all(&content)
-            .await
-            .expect("Failed to write to file");
+        self.submitted_code.read_to_end(&mut content).await?;
+        code_file.write_all(&content).await?;
 
         let artifact = build_file(code_file).await?;
 

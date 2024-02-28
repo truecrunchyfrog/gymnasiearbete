@@ -12,9 +12,6 @@ use tokio_stream::StreamExt;
 pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, anyhow::Error> {
     let images = docker.list_images::<&str>(None).await?;
     for img in images {
-<<<<<<< HEAD
-        let img_name = img.repo_tags.first().unwrap().split(':').next().unwrap();
-=======
         let img_name = img
             .repo_tags
             .first()
@@ -22,7 +19,6 @@ pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, anyhow::
             .split(':')
             .next()
             .expect("Not found");
->>>>>>> 15d7f9d0ffd7383a12b4ce77c3d979a480c6c5f9
         if img_name == image {
             return Ok(true);
         }
@@ -44,9 +40,7 @@ pub async fn create_targz_archive(
     mut file: File,
     filename: &str,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    file.seek(std::io::SeekFrom::Start(0))
-        .await
-        .expect("Failed to seek file");
+    file.seek(std::io::SeekFrom::Start(0)).await?;
 
     // Read the content of the file
     let mut content = Vec::new();
@@ -70,9 +64,7 @@ pub async fn create_targz_archive(
 
         header.set_size(content.len() as u64);
         header.set_cksum();
-        builder
-            .append(&header, content.as_slice())
-            .expect("Failed to append file to archive");
+        builder.append(&header, content.as_slice())?;
     }
 
     Ok(archive)

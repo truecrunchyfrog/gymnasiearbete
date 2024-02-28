@@ -11,10 +11,7 @@ use crate::api::log_in::login_route;
 use crate::api::root::{get_server_status, root};
 use crate::api::run_code::{build_and_run, run_hello_world_test};
 use crate::api::upload_file::upload;
-use crate::simulation::scoring::caluclate_score;
 
-use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
-use crate::simulation::scoring::calculate_score;
 use crate::tasks::start_task_thread;
 
 use axum::extract::{Path, Query};

@@ -30,13 +30,13 @@ pub async fn root() -> Result<Json<Value>> {
 }
 
 pub async fn get_token(headers: axum::http::HeaderMap) -> Result<String> {
-    match headers.get(AUTHORIZATION) {
-        Some(value) => match value.to_str() {
+    headers.get(AUTHORIZATION).map_or_else(
+        || Err(Error::LoginFail.into()),
+        |value| match value.to_str() {
             Ok(o) => Ok(o.to_string()),
-            Err(_e) => Err(Error::AuthFailTokenWrongFormat),
+            Err(_e) => Err(Error::AuthFailTokenWrongFormat.into()),
         },
-        None => Err(Error::LoginFail),
-    }
+    )
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

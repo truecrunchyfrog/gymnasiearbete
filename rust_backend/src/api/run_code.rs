@@ -32,10 +32,15 @@ use uuid::Uuid;
 async fn extract_file_from_multipart(
     mut multipart: Multipart,
 ) -> std::result::Result<File, anyhow::Error> {
-    let mut file = File::from_std(tempfile().expect("Failed to create a temporary file"));
+    let mut file = File::from_std(tempfile()?);
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
-        let name = field.name().unwrap().to_string();
+        let name = match field.name() {
+            Some(name) => name,
+            None => {
+                continue;
+            }
+        };
         let data = field.bytes().await?;
 
         // Write data to the file
@@ -56,11 +61,15 @@ pub async fn build_and_run(ctx: Ctx, mut multipart: Multipart) -> Result<Json<Va
     let mut artifact_file = build_file(file).await?;
 
     let output = run_file(artifact_file).await?;
+    let output_log = output
+        .logs
+        .last()
+        .map_or_else(|| "".to_string(), |log| log.to_string().trim().to_string());
 
     let json = Json(json!({
         "message": "Successfully uploaded file",
         "status": "success",
-        "output": output.logs.last().expect("Wow").to_string().trim(),
+        "output": output_log,
     }));
 
     Ok(json)

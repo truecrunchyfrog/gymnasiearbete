@@ -1,5 +1,6 @@
 use std::{ffi::OsStr, path::Path};
 
+use crate::Result;
 use chrono::Utc;
 use std::fs;
 use uuid::Uuid;
@@ -11,11 +12,17 @@ pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
 }
 
 // &name, &path_str, &"c".to_string(),user_uuid
-pub fn create_file(file_name: &str, file_path: &str, language: &str, user_id: Uuid) -> File {
-    let file_content = fs::read(file_path).expect("Failed to read file");
-    let file_size = fs::read(file_path).expect("Failed to read file").len();
+pub fn create_file(
+    file_name: &str,
+    file_path: &str,
+    language: &str,
+    user_id: Uuid,
+) -> Result<File> {
+    let file_content = fs::read(file_path)?;
+
+    let file_size = fs::read(file_path)?.len();
     let hash_str = format!("{:x}", md5::compute(&file_content));
-    File {
+    Ok(File {
         id: Uuid::new_v4(),
         file_name: file_name.to_string(),
         file_hash: hash_str,
@@ -27,5 +34,5 @@ pub fn create_file(file_name: &str, file_path: &str, language: &str, user_id: Uu
         created_at: Utc::now().naive_utc(),
         last_modified_at: Utc::now().naive_utc(),
         parent_id: None,
-    }
+    })
 }

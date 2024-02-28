@@ -11,6 +11,7 @@ use tokio_stream::StreamExt;
 
 use crate::docker::build_image::{self, get_image};
 use crate::docker::common::{extract_file_from_tar_archive, image_exists};
+use crate::error::AppError;
 use crate::schema::files::id;
 use bollard::container::{
     Config, CreateContainerOptions, LogOutput, LogsOptions, StartContainerOptions, Stats,
@@ -34,10 +35,9 @@ use maplit::hashmap;
 use tar::{Builder, Header};
 use tempdir::TempDir;
 
-async fn start_container(
-    docker: &Docker,
-    container_id: &str,
-) -> Result<(), bollard::errors::Error> {
+use crate::Result;
+
+async fn start_container(docker: &Docker, container_id: &str) -> Result<()> {
     info!("Starting container");
     // Start the container
     docker
@@ -46,10 +46,7 @@ async fn start_container(
     Ok(())
 }
 
-async fn create_container(
-    docker: &Docker,
-    preset: impl ContainerPreset + Send,
-) -> Result<String, bollard::errors::Error> {
+async fn create_container(docker: &Docker, preset: impl ContainerPreset + Send) -> Result<String> {
     info!("Creating container");
 
     let mut config = preset.container_config();
@@ -57,15 +54,12 @@ async fn create_container(
     let container = docker.create_container(Some(preset.create_options()), config);
     let container_id = match container.await {
         Ok(o) => o.id,
-        Err(e) => return Err(e),
+        Err(e) => return Err(e.into()),
     };
     Ok(container_id)
 }
 
-async fn remove_old_container(
-    docker: &Docker,
-    container_name: &str,
-) -> Result<(), bollard::errors::Error> {
+async fn remove_old_container(docker: &Docker, container_name: &str) -> Result<()> {
     //Check if the container exists
     let container_exists = docker.inspect_container(container_name, None).await;
 
@@ -79,10 +73,7 @@ async fn remove_old_container(
     Ok(())
 }
 
-async fn get_logs(
-    docker: &Docker,
-    preset: impl ContainerPreset,
-) -> Result<Vec<LogOutput>, bollard::errors::Error> {
+async fn get_logs(docker: &Docker, preset: impl ContainerPreset) -> Result<Vec<LogOutput>> {
     let container_name = preset.info().name;
 
     let options = preset.logs_options();
@@ -101,14 +92,24 @@ async fn copy_file_into_container(
     container_id: &str,
     mut file: File,
     destination: &Path,
-) -> Result<(), anyhow::Error> {
-    let file_name = destination.file_name().unwrap().to_str().unwrap();
+) -> Result<()> {
+    // This is awful, but it's the only way to get the file name
+    let file_name = match destination.file_name() {
+        Some(name) => match name.to_str() {
+            Some(name) => name,
+            None => return Err(crate::Error::InternalServerError.into()),
+        },
+        None => return Err(crate::Error::InternalServerError.into()),
+    };
 
     let mut dest = destination.to_path_buf();
     dest.pop();
 
+    // This is a hack to get the destination path
+    let dest = dest.to_str().map_or("/", |s| s);
+
     let options = Some(UploadToContainerOptions {
-        path: dest.to_str().unwrap(),
+        path: dest,
         ..Default::default()
     });
 
@@ -124,7 +125,7 @@ async fn copy_file_into_container(
     Ok(())
 }
 
-async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), bollard::errors::Error> {
+async fn stop_container(docker: &Docker, container_id: &str) -> Result<()> {
     info!("Stopping container {}", container_id);
 
     let options: StopContainerOptions = StopContainerOptions { t: 1 };
@@ -133,10 +134,7 @@ async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), bolla
     Ok(())
 }
 
-async fn remove_container(
-    docker: &Docker,
-    container_id: &str,
-) -> Result<(), bollard::errors::Error> {
+async fn remove_container(docker: &Docker, container_id: &str) -> Result<()> {
     info!("Removing container");
     // Stop and remove the container
     docker.stop_container(container_id, None).await?;
@@ -144,11 +142,7 @@ async fn remove_container(
     Ok(())
 }
 
-async fn exec_in_container(
-    docker: &Docker,
-    container_id: &str,
-    command: Vec<&str>,
-) -> Result<(), bollard::errors::Error> {
+async fn exec_in_container(docker: &Docker, container_id: &str, command: Vec<&str>) -> Result<()> {
     let config = CreateExecOptions {
         cmd: Some(command),
         ..Default::default()
@@ -162,7 +156,7 @@ async fn get_file_from_container(
     docker: &Docker,
     container_id: &str,
     file_path: &str,
-) -> Result<Vec<u8>, anyhow::Error> {
+) -> Result<Vec<u8>> {
     let options = Some(DownloadFromContainerOptions { path: file_path });
     let stream = docker.download_from_container(container_id, options);
     // Use try_fold to accumulate the bytes into a Vec<u8>
@@ -177,7 +171,7 @@ async fn get_file_from_container(
 pub async fn gcc_container(
     source_file: File,
     preset: impl ContainerPreset + std::marker::Copy,
-) -> Result<File, anyhow::Error> {
+) -> Result<File> {
     let docker = Docker::connect_with_local_defaults()?;
 
     let container_name = preset.info().name;
@@ -188,9 +182,7 @@ pub async fn gcc_container(
         false => get_image(preset).await?,
     };
 
-    remove_old_container(&docker, &container_name)
-        .await
-        .expect("Failed to remove old container");
+    remove_old_container(&docker, &container_name).await?;
 
     let container_id = create_container(&docker, preset).await?;
 
@@ -198,9 +190,7 @@ pub async fn gcc_container(
 
     info!("Copying file into container");
 
-    copy_file_into_container(&docker, &container_id, source_file, destination_path)
-        .await
-        .expect("Failed to copy file into container");
+    copy_file_into_container(&docker, &container_id, source_file, destination_path).await?;
 
     start_container(&docker, &container_id).await?;
 
@@ -208,7 +198,6 @@ pub async fn gcc_container(
 
     let wait_options = WaitContainerOptions {
         condition: "not-running",
-        ..Default::default()
     };
 
     let container_stats = get_container_stats(&docker, &container_id).await?;
@@ -246,13 +235,9 @@ pub async fn gcc_container(
 
     let mut archive_file: File = File::create("archive.tar").await?;
     archive_file.write_all(&archive_bytes).await?;
-    archive_file
-        .seek(std::io::SeekFrom::Start(0))
-        .await
-        .expect("Failed to seek file");
+    archive_file.seek(std::io::SeekFrom::Start(0)).await?;
 
-    let mut archive_file: File =
-        File::from_std(tempfile().expect("Failed to create a temporary file"));
+    let mut archive_file: File = File::from_std(tempfile()?);
     let mut buff = Vec::new();
     // load file from disk
     let mut file = File::open("archive.tar").await?;
@@ -260,19 +245,13 @@ pub async fn gcc_container(
     archive_file.write_all(&buff).await?;
 
     // Extract the file from the archive
-    let buff = extract_file_from_tar_archive(archive_file, "example.o")
-        .await
-        .expect("Failed to extract file from archive");
+    let buff = extract_file_from_tar_archive(archive_file, "example.o").await?;
 
     info!("File size: {}", buff.len());
 
-    let mut file = File::from_std(tempfile().expect("Failed to create a temporary file"));
-    file.write_all(&buff)
-        .await
-        .expect("Failed to write to file");
-    file.seek(std::io::SeekFrom::Start(0))
-        .await
-        .expect("Failed to seek file");
+    let mut file = File::from_std(tempfile()?);
+    file.write_all(&buff).await?;
+    file.seek(std::io::SeekFrom::Start(0)).await?;
 
     Ok(file)
 }
@@ -281,7 +260,7 @@ pub async fn send_stdin_to_container(
     docker: &Docker,
     container_id: &str,
     stdin: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<()> {
     let config = CreateExecOptions {
         cmd: Some(vec![stdin.to_string()]),
         ..Default::default()
@@ -293,7 +272,7 @@ pub async fn send_stdin_to_container(
 pub async fn run_preset(
     file: File,
     preset: impl ContainerPreset + std::marker::Copy,
-) -> Result<ContainerOutput, anyhow::Error> {
+) -> Result<ContainerOutput> {
     let docker = Docker::connect_with_local_defaults()?;
 
     let container_name = preset.info().name;
@@ -322,14 +301,11 @@ pub async fn run_preset(
 
     loop {
         // Check if the container is running
-        let d = docker
-            .inspect_container(&container_id, None)
-            .await
-            .expect("Failed to inspect container");
+        let d = docker.inspect_container(&container_id, None).await?;
 
         match d.state {
             Some(state) => {
-                if state.running.unwrap() {
+                if state.running.is_some() {
                     // Print container stats
                     let stats = get_container_stats(&docker, &container_id).await?;
                     info!("{:?}", stats.cpu_stats);
@@ -363,10 +339,7 @@ pub async fn run_preset(
     Ok(output)
 }
 
-pub async fn get_container_stats(
-    docker: &Docker,
-    container_id: &str,
-) -> Result<Stats, bollard::errors::Error> {
+pub async fn get_container_stats(docker: &Docker, container_id: &str) -> Result<Stats> {
     let options = Some(StatsOptions {
         stream: false,
         one_shot: false,
@@ -375,15 +348,16 @@ pub async fn get_container_stats(
         .stats(container_id, options)
         .into_stream()
         .next()
-        .await
-        .expect("Failed to find")?;
-    Ok(stats)
+        .await;
+
+    match stats {
+        Some(Ok(stats)) => Ok(stats),
+        Some(Err(e)) => Err(e.into()),
+        None => Err(anyhow::anyhow!("No stats found").into()),
+    }
 }
 
-pub async fn get_metrics(
-    docker: &Docker,
-    container_id: &str,
-) -> Result<Metrics, bollard::errors::Error> {
+pub async fn get_metrics(docker: &Docker, container_id: &str) -> Result<Metrics> {
     let options = Some(StatsOptions {
         stream: false,
         one_shot: true,
@@ -409,7 +383,7 @@ pub async fn get_metrics(
         let memory_usage = memory_stats.usage.expect("Not found") as f64;
 
         cpu_user = cpu_usage / system_cpu_usage * 100.0;
-        cpu_system = (system_cpu_usage / system_cpu_usage) * 100.0;
+        cpu_system = (cpu_usage / system_cpu_usage) * 100.0;
         memory = memory_usage / memory_stats.limit.expect("Not found") as f64 * 100.0;
     }
 

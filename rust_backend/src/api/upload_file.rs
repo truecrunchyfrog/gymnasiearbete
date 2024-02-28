@@ -26,14 +26,17 @@ pub async fn upload(
         let body = json!({
             "status":"success",
         });
+
+        let current_time = chrono::Utc::now().naive_utc();
+
         let file_info = FileInfo {
             file_id: file_id.to_string(),
             file_name: name,
-            time_submitted: NaiveDateTime::from_timestamp_opt(0, 0).unwrap(),
+            time_submitted: current_time,
             result: None,
         };
         return Ok(axum::Json(file_info));
     }
 
-    Err(Error::InternalServerError)
+    Err(Error::InternalServerError.into())
 }

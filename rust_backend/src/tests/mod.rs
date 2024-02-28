@@ -59,16 +59,13 @@ mod api_tests {
     #[tokio::test]
     async fn test_create_targz_archive() {
         // Create a temporary file and write some content to it
-        let temp_file = tempfile().expect("Failed to create a temporary file");
+        let temp_file = tempfile().unwrap();
 
         let content = b"Hello, world!";
 
         let mut temp_file = File::from_std(temp_file);
 
-        temp_file
-            .write_all(content)
-            .await
-            .expect("Failed to write to file");
+        temp_file.write_all(content).await.unwrap();
 
         // Call the function to create a tar.gz archive
         let result = create_targz_archive(temp_file, "file").await;
@@ -78,7 +75,7 @@ mod api_tests {
 
         // Additional assertions based on your requirements
         // For example, you might want to check the size of the generated archive
-        let archive_content = result.expect("Failed to get archive content");
+        let archive_content = result.unwrap();
         assert!(!archive_content.is_empty());
 
         // Clean up: The temporary file will be deleted when 'temp_file' goes out of scope
