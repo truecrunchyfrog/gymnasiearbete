@@ -37,5 +37,5 @@ pub async fn get_image(
             }
         })
         .await;
-    return docker.inspect_image(&image_name).await;
+    docker.inspect_image(&image_name).await
 }

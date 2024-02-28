@@ -102,7 +102,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Ctx {
 fn parse_token(token: String) -> Result<(String)> {
     if let Some(index) = token.find('=') {
         // Return the substring after the '=' sign
-        Ok((&token[index + 1..]).to_string())
+        Ok(token[index + 1..].to_string())
     } else {
         // Return the original string if '=' is not found
         Ok(token)

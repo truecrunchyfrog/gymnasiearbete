@@ -5,9 +5,12 @@ use self::error::{Error, Result};
 use tokio::time::Duration;
 
 use crate::api::create_account::register_account;
+use crate::api::get_files::get_user_files;
+use crate::api::get_user_data::get_user_info;
 use crate::api::log_in::login_route;
+use crate::api::root::{get_server_status, root};
 use crate::api::run_code::{build_and_run, run_hello_world_test};
-use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
+use crate::api::upload_file::upload;
 use crate::simulation::scoring::caluclate_score;
 use crate::tasks::start_task_thread;
 
@@ -39,8 +42,6 @@ mod simulation;
 mod tasks;
 mod tests;
 mod utils;
-
-use api::server::root;
 
 #[derive(Clone)]
 pub struct AppState {

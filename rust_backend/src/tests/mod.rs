@@ -53,7 +53,7 @@ mod api_tests {
     async fn test_db_connection() {
         let mut conn = establish_connection();
         let s = conn.ping();
-        assert_eq!(s.is_ok(), true);
+        assert!(s.is_ok());
     }
 
     #[tokio::test]
@@ -79,7 +79,7 @@ mod api_tests {
         // Additional assertions based on your requirements
         // For example, you might want to check the size of the generated archive
         let archive_content = result.expect("Failed to get archive content");
-        assert!(archive_content.len() > 0);
+        assert!(!archive_content.is_empty());
 
         // Clean up: The temporary file will be deleted when 'temp_file' goes out of scope
     }

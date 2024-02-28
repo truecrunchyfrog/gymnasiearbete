@@ -1,5 +1,5 @@
+use crate::api::auth::hashing::check_password;
 use crate::api::authentication::AUTH_TOKEN;
-use crate::api::hashing::check_password;
 use crate::Json;
 use crate::Result;
 use crate::{
@@ -55,7 +55,7 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
     let token = generate_session_token();
 
     let mut now = OffsetDateTime::now_utc();
-    now = now + Duration::days(7);
+    now += Duration::days(7);
 
     let one_week = NaiveDateTime::from_timestamp_opt(now.unix_timestamp(), 0)
         .expect("Failed to create NaiveDateTime from OffsetDateTime");

@@ -9,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, bollard::errors::Error> {
     let images = docker.list_images::<&str>(None).await?;
     for img in images {
-        let img_name = img.repo_tags.get(0).unwrap().split(":").next().unwrap();
+        let img_name = img.repo_tags.first().unwrap().split(':').next().unwrap();
         if img_name == image {
             return Ok(true);
         }
@@ -37,7 +37,7 @@ pub async fn create_targz_archive(
 
     // Read the content of the file
     let mut content = Vec::new();
-    file.take(u64::MAX.into()) // Read the entire content of the file
+    file.take(u64::MAX) // Read the entire content of the file
         .read_to_end(&mut content)
         .await?;
 

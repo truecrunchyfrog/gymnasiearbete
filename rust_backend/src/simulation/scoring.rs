@@ -25,7 +25,7 @@ pub async fn caluclate_score() -> Result<u32, anyhow::Error> {
     let eased_score = ease_out(combined_score);
 
     // Map the eased score to the range [1, 100]
-    let final_score = (eased_score * 99.0 + 1.0).round() as u32;
+    let final_score = eased_score.mul_add(99.0, 1.0).round() as u32;
 
     Ok(final_score)
 }
@@ -37,5 +37,5 @@ fn cpu_score(time: f64, max: f64) -> Option<f64> {
 
 // Easing function (simple quadratic ease out)
 fn ease_out(t: f64) -> f64 {
-    1.0 - (1.0 - t).powi(2)
+    (1.0 - t).mul_add(-(1.0 - t), 1.0)
 }

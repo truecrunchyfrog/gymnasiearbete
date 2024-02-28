@@ -129,7 +129,7 @@ async fn stop_container(docker: &Docker, container_id: &str) -> Result<(), bolla
 
     let options: StopContainerOptions = StopContainerOptions { t: 1 };
 
-    let _ = docker.stop_container(container_id, Some(options)).await?;
+    docker.stop_container(container_id, Some(options)).await?;
     Ok(())
 }
 
@@ -139,8 +139,8 @@ async fn remove_container(
 ) -> Result<(), bollard::errors::Error> {
     info!("Removing container");
     // Stop and remove the container
-    let _ = docker.stop_container(container_id, None).await?;
-    let _ = docker.remove_container(container_id, None).await?;
+    docker.stop_container(container_id, None).await?;
+    docker.remove_container(container_id, None).await?;
     Ok(())
 }
 
@@ -198,11 +198,11 @@ pub async fn gcc_container(
 
     info!("Copying file into container");
 
-    let _ = copy_file_into_container(&docker, &container_id, source_file, destination_path)
+    copy_file_into_container(&docker, &container_id, source_file, destination_path)
         .await
         .expect("Failed to copy file into container");
 
-    let _ = start_container(&docker, &container_id).await?;
+    start_container(&docker, &container_id).await?;
 
     info!("Waiting for container to finish");
 
@@ -231,7 +231,7 @@ pub async fn gcc_container(
 
     let archive_bytes = get_file_from_container(&docker, &container_id, "/example.o").await?;
 
-    let _ = stop_container(&docker, &container_id).await?;
+    stop_container(&docker, &container_id).await?;
 
     if archive_bytes.is_empty() {
         panic!("Binary file is empty");
@@ -313,10 +313,10 @@ pub async fn run_preset(
 
     // Copy the file into the container
     let destination_path: &Path = Path::new("/program.o");
-    let _ = copy_file_into_container(&docker, &container_id, file, destination_path).await?;
+    copy_file_into_container(&docker, &container_id, file, destination_path).await?;
 
     // Start the container
-    let _ = start_container(&docker, &container_id).await?;
+    start_container(&docker, &container_id).await?;
 
     info!("Container started");
 
@@ -351,7 +351,7 @@ pub async fn run_preset(
     //let metrics = get_metrics(&docker, &container_id).await?;
 
     // Stop the container
-    let _ = stop_container(&docker, &container_id).await?;
+    stop_container(&docker, &container_id).await?;
 
     let output = ContainerOutput {
         logs: container_logs,
