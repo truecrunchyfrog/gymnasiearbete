@@ -9,47 +9,54 @@ use tokio::{
 use crate::api::run_code::{self, build_file, run_file};
 
 pub struct PingPong {
-    pub submited_code: File,
-    pub result: String,
-    pub answer: String,
+    pub submitted_code: File,
+    pub result: Option<String>,
+    pub correct_answer: String,
 }
 
 pub trait GameLogic {
-    async fn start(self);
+    async fn start(self) -> Result<(), anyhow::Error>;
     async fn setup(&self);
     async fn verify(&self) -> bool;
-    async fn run(&mut self) -> String;
+    async fn run(&mut self) -> Result<Option<String>, anyhow::Error>;
 }
 
 impl PingPong {
-    pub async fn new(player: i32) -> Self {
+    pub async fn new(file: File) -> Self {
         Self {
             // Load example.c from disk
-            submited_code: File::open("example.c").await.unwrap(),
-
-            answer: "Correct".to_string(),
-            result: "".to_string(),
+            submitted_code: file,
+            correct_answer: "pong".to_string(),
+            result: None,
         }
     }
 }
 
 impl GameLogic for PingPong {
-    async fn start(mut self) {
+    async fn start(mut self) -> Result<(), anyhow::Error> {
+        info!("Starting game");
         self.setup().await;
-        self.result = self.run().await;
+        self.result = self.run().await?;
         let won = self.verify().await;
         info!("Game won: {}", won);
+        Ok(())
     }
-    async fn setup(&self) {}
+    async fn setup(&self) {
+        info!("Setting up game")
+    }
     async fn verify(&self) -> bool {
-        self.answer == self.result
+        info!("Verifying game");
+        self.result
+            .as_ref()
+            .map_or(false, |result| result == &self.correct_answer)
     }
-    async fn run(&mut self) -> String {
+    async fn run(&mut self) -> Result<Option<String>, anyhow::Error> {
+        info!("Running game");
         let mut code_file: File =
             File::from_std(tempfile().expect("Failed to create a temporary file"));
         // Write the content of the file to the temporary file
         let mut content = Vec::new();
-        self.submited_code
+        self.submitted_code
             .read_to_end(&mut content)
             .await
             .expect("Failed to read file");
@@ -58,23 +65,22 @@ impl GameLogic for PingPong {
             .await
             .expect("Failed to write to file");
 
-        let artifact = build_file(code_file).await.unwrap();
-        let mut file_content =
-            crate::docker::common::extract_file_from_tar_archive(artifact, "program.o")
-                .await
-                .expect("Failed to extract file from archive");
-        let mut file: File = File::from_std(tempfile().expect("Failed to create a temporary file"));
-        file.write_all(&file_content)
-            .await
-            .expect("Failed to write to file");
-        let output = run_file(file).await.unwrap();
+        let artifact = build_file(code_file).await?;
 
-        info!("Metrics: {:?}", output.metrics);
+        let output = run_file(artifact).await?;
 
-        return output.logs.last().unwrap().to_string();
+        let logs: Option<String> = match output.logs.last() {
+            Some(ref logs) => Some(logs.to_string()),
+            None => return Ok(None),
+        };
+        self.result = logs.clone();
+        info!("Player output: {:?}", self.result);
+
+        Ok(logs)
     }
 }
 
-pub async fn start_game<T: GameLogic>(game: T) {
+pub async fn start_game<T: GameLogic + Send>(game: T) {
+    info!("Starting game");
     T::start(game);
 }

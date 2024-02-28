@@ -1,15 +1,28 @@
+use bollard::image::BuildImageOptions;
 use bollard::Docker;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::io::prelude::*;
 use tar::Builder;
+use tempfile::tempfile;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio_stream::StreamExt;
 
-pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, bollard::errors::Error> {
+pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool, anyhow::Error> {
     let images = docker.list_images::<&str>(None).await?;
     for img in images {
+<<<<<<< HEAD
         let img_name = img.repo_tags.first().unwrap().split(':').next().unwrap();
+=======
+        let img_name = img
+            .repo_tags
+            .first()
+            .expect("Not found")
+            .split(':')
+            .next()
+            .expect("Not found");
+>>>>>>> 15d7f9d0ffd7383a12b4ce77c3d979a480c6c5f9
         if img_name == image {
             return Ok(true);
         }
@@ -69,6 +82,7 @@ pub async fn extract_file_from_tar_archive(
     mut archive: File,
     filename: &str,
 ) -> Result<Vec<u8>, anyhow::Error> {
+    info!("Extracting file from archive");
     // Seek back to the beginning of the file before reading its contents
     archive
         .seek(std::io::SeekFrom::Start(0))
@@ -92,4 +106,43 @@ pub async fn extract_file_from_tar_archive(
     }
 
     Ok(file)
+}
+
+pub async fn build_dockerfile() -> Result<(), anyhow::Error> {
+    let dockerfile_path = "./docker/Dockerfile";
+
+    // list files in ./docker
+    let mut dir = tokio::fs::read_dir("./docker").await?;
+    while let Some(entry) = dir.next_entry().await? {
+        info!("Entry: {:?}", entry);
+    }
+
+    // Verify that the Dockerfile exists
+    if !std::path::Path::new(dockerfile_path).exists() {
+        error!("Dockerfile does not exist");
+        return Err(anyhow::anyhow!("Dockerfile does not exist"));
+    }
+
+    let docker = Docker::connect_with_local_defaults()?;
+    let options: BuildImageOptions<String> = BuildImageOptions {
+        dockerfile: "Dockerfile".to_string(),
+        t: "code-runner".to_string(),
+        ..Default::default()
+    };
+    let file = File::open(dockerfile_path).await?;
+    let archive_bytes = create_targz_archive(file, "Dockerfile").await?;
+
+    let mut stream = docker.build_image(options, None, Some(archive_bytes.into()));
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(chunk) => {
+                debug!("Chunk: {:?}", chunk);
+            }
+            Err(e) => {
+                error!("Error: {}", e);
+                return Err(anyhow::anyhow!("Failed to build image"));
+            }
+        }
+    }
+    Ok(())
 }

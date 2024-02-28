@@ -74,7 +74,7 @@ impl ContainerPreset for CodeRunnerPreset {
     fn info(&self) -> ContainerInfo {
         ContainerInfo {
             name: "code-runner".to_string(),
-            image: "clearlinux".to_string(),
+            image: "linuxkit/kernel-perf".to_string(),
             tag: "latest".to_string(),
             remote: true,
         }
