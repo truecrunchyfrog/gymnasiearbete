@@ -14,6 +14,8 @@ pub struct ContainerInfo {
     pub image: String,
     pub tag: String,
     pub remote: bool,
+    pub input: String,
+    pub output: String,
 }
 
 pub trait ContainerPreset: Send + Sync {
@@ -77,13 +79,19 @@ impl ContainerPreset for CodeRunnerPreset {
             image: "linuxkit/kernel-perf".to_string(),
             tag: "latest".to_string(),
             remote: true,
+            input: "program.o".to_string(),
+            output: todo!(),
         }
     }
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some(self.info().image),
             // Command we want to run: first chmod +x the file, then run it and output the result to stdout, the program is named program.o
-            entrypoint: construct_command("sh -c 'chmod +x program.o && ./program.o'"),
+            entrypoint: construct_command(&format!(
+                "sh -c 'chmod +x {} && ./{}'",
+                self.info().input,
+                self.info().input
+            )),
             ..Default::default()
         }
     }
@@ -98,6 +106,8 @@ impl ContainerPreset for HelloWorldPreset {
             image: "hello-world".to_string(),
             tag: "latest".to_string(),
             remote: true,
+            input: todo!(),
+            output: todo!(),
         }
     }
     fn container_config(&self) -> Config<String> {
@@ -109,13 +119,21 @@ impl ContainerPreset for HelloWorldPreset {
     }
 }
 
+const GCC_COMMAND: &str = "gcc";
+const INPUT_FILE: &str = "example.c";
+const OUTPUT_FILE: &str = "example.o";
+
+fn construct_gcc_command(base: &str, input: &str, output: &str) -> String {
+    format!("{} {} -o {}", base, input, output)
+}
+
 #[derive(Clone, Copy)]
 pub struct CompilerPreset;
 impl ContainerPreset for CompilerPreset {
     fn container_config(&self) -> Config<String> {
         Config {
             image: Some(self.info().image),
-            cmd: construct_command("gcc example.c -o example.o"),
+            cmd: construct_command(&construct_gcc_command(GCC_COMMAND, INPUT_FILE, OUTPUT_FILE)),
             ..Default::default()
         }
     }
@@ -126,6 +144,8 @@ impl ContainerPreset for CompilerPreset {
             image: "gcc".to_string(),
             tag: "latest".to_string(),
             remote: true,
+            input: INPUT_FILE.to_string(),
+            output: OUTPUT_FILE.to_string(),
         }
     }
 }

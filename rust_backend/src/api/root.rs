@@ -3,7 +3,6 @@ use crate::database::connection::{
     get_file_from_id, get_files_from_user, get_token_owner, get_user, upload_file,
 };
 use crate::database::User;
-use crate::tasks::ExampleTask;
 use crate::utils::{create_file, get_extension_from_filename};
 use crate::{ctx, AppState};
 use axum::extract::{Multipart, State};

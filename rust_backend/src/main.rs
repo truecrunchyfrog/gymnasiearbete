@@ -12,8 +12,6 @@ use crate::api::root::{get_server_status, root};
 use crate::api::run_code::{build_and_run, run_hello_world_test};
 use crate::api::upload_file::upload;
 
-use crate::tasks::start_task_thread;
-
 use axum::extract::{Path, Query};
 use axum::http::{Method, Uri};
 use axum::response::{Html, IntoResponse, Response};
@@ -78,7 +76,7 @@ async fn main() -> Result<()> {
     startup_checks().await?;
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
-    start_task_thread(task_manager.clone());
+    task_manager.lock().unwrap().start_runner();
     let state = AppState { tm: task_manager };
 
     info!("Starting axum router");
