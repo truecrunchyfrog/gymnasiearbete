@@ -5,10 +5,12 @@ use self::error::{Error, Result};
 use tokio::time::Duration;
 
 use crate::api::create_account::register_account;
+use crate::api::get_files::get_user_files;
+use crate::api::get_user_data::get_user_info;
 use crate::api::log_in::login_route;
-use crate::api::run_code::build_and_run;
-use crate::api::server::{get_server_status, get_user_files, get_user_info, upload};
-use crate::tasks::start_task_thread;
+use crate::api::root::{get_server_status, root};
+use crate::api::run_code::{build_and_run, run_hello_world_test};
+use crate::api::upload_file::upload;
 
 use axum::extract::{Path, Query};
 use axum::http::{Method, Uri};
@@ -17,8 +19,6 @@ use axum::routing::{get, get_service, post};
 use axum::{middleware, Json, Router};
 
 use ctx::Ctx;
-
-use env_logger::{Env, Logger};
 
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -41,8 +41,6 @@ mod tasks;
 mod tests;
 mod utils;
 
-use api::server::root;
-
 #[derive(Clone)]
 pub struct AppState {
     tm: Arc<Mutex<TaskManager>>,
@@ -56,42 +54,30 @@ pub fn check_docker_socket() -> bool {
 async fn startup_checks() -> Result<()> {
     info!("Initializing");
 
-    let mut game = simulation::sim::PingPong::new(1);
-    simulation::sim::start_game(&game);
-
     #[cfg(not(unix))]
-    {
-        warn!("Warning! Running on Windows. Docker will be unavailable!");
-    }
+    warn!("Warning! Running on Windows. Docker will be unavailable!");
 
     #[cfg(unix)]
-    {
-        if !check_docker_socket() {
-            warn!("Warning! Docker socket does not exist!");
-        }
+    if !check_docker_socket() {
+        warn!("Warning! Docker socket does not exist!");
     }
-    info!("Running database migrations");
+
+    debug!("Running database migrations");
     database::connection::run_migrations();
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env = Env::new()
-        // filters out any messages that aren't at "info" log level or above
-        .filter_or("MY_LOG", "info")
-        // always use styles when printing
-        .write_style_or("MY_LOG_STYLE", "always");
+    // Starts the logger
+    env_logger::init();
 
-    let logger = Logger::from_env(env);
-
+    // Run checks
     startup_checks().await?;
 
     let task_manager = Arc::new(Mutex::new(TaskManager { tasks: Vec::new() }));
-    start_task_thread(task_manager.clone());
+    task_manager.lock().unwrap().start_runner();
     let state = AppState { tm: task_manager };
-
-    // tracing_subscriber::fmt::init();
 
     info!("Starting axum router");
 
@@ -110,12 +96,15 @@ async fn main() -> Result<()> {
         .layer(CookieManagerLayer::new())
         .with_state(state);
 
-    // run our app with hyper, listening globally on port 3000
+    // Setup a TcpListener
     let listener = TcpListener::bind("127.0.0.1:3000")
         .await
         .expect("Failed to bind port");
 
-    println!("->> LISTENING on {:?}\n", listener.local_addr().unwrap());
+    println!(
+        "->> LISTENING on {:?}\n",
+        listener.local_addr().expect("Failed to get local address")
+    );
 
     axum::serve(listener, app.into_make_service())
         .await

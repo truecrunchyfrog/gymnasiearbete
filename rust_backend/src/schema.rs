@@ -9,13 +9,17 @@ pub mod sql_types {
 diesel::table! {
     files (id) {
         id -> Uuid,
+        #[max_length = 255]
+        file_name -> Varchar,
+        #[max_length = 255]
+        file_hash -> Varchar,
         file_size -> Int4,
         file_content -> Nullable<Bytea>,
         owner_uuid -> Uuid,
         #[max_length = 255]
         file_type -> Nullable<Varchar>,
-        created_at -> Nullable<Timestamptz>,
-        last_modified_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        last_modified_at -> Timestamptz,
         parent_id -> Nullable<Uuid>,
     }
 }

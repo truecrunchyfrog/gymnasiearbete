@@ -30,7 +30,7 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
                 "reason_type": "BAD_USERNAME",
                 "reason": "Username must be between 6 and 16 characters and contain only alphanumeric characters"
             }
-        })))
+        })));
     }
 
     // verify password
@@ -41,7 +41,7 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
                 "reason_type": "BAD_PASSWORD",
                 "reason": "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
             }
-        })))
+        })));
     }
 
     // check if username exists
@@ -53,23 +53,25 @@ pub async fn register_account(payload: Json<RegistrationPayload>) -> Result<Json
                 "reason_type": "USERNAME_TAKEN",
                 "reason": "Username already exists"
             }
-        })))
+        })));
     }
 
     let password_salt = SaltString::generate(&mut OsRng);
 
-    let password_hash = match Argon2::default()
-    .hash_password(payload.password.as_bytes(), &password_salt) {
-        Ok(ref p_hash) => p_hash.to_string(),
+    let password_hash =
+        match Argon2::default().hash_password(payload.password.as_bytes(), &password_salt) {
+            Ok(ref p_hash) => p_hash.to_string(),
 
-        _ => return Ok(Json(json!({
-            "result": {
-                "success": false,
-                "reason_type": "HASH_FAILED",
-                "reason": "Failed to hash password"
+            _ => {
+                return Ok(Json(json!({
+                    "result": {
+                        "success": false,
+                        "reason_type": "HASH_FAILED",
+                        "reason": "Failed to hash password"
+                    }
+                })))
             }
-        })))
-    };
+        };
 
     let upload = upload_user(&payload.username, password_hash).await?;
 
@@ -108,5 +110,5 @@ async fn upload_user(other_username: &str, hash: String) -> Result<Uuid> {
 #[derive(Debug, Deserialize)]
 pub struct RegistrationPayload {
     username: String,
-    password: String
+    password: String,
 }

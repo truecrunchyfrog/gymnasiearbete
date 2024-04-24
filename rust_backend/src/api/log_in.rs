@@ -1,4 +1,7 @@
-use crate::api::hashing::check_password;
+use crate::api::auth::hashing::check_password;
+use crate::api::authentication::AUTH_TOKEN;
+use crate::error::AppError;
+use crate::error::ClientError;
 use crate::Json;
 use crate::Result;
 use crate::{
@@ -8,10 +11,12 @@ use crate::{
 use argon2::password_hash::Salt;
 use argon2::PasswordHash;
 use axum::{debug_handler, http::StatusCode, Form};
-use chrono::{DateTime, Duration, Utc};
+use chrono::NaiveDateTime;
+use cookie::time::{Duration, OffsetDateTime};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tower_cookies::cookie;
 use tower_cookies::{Cookie, Cookies};
 
 #[derive(Deserialize)]
@@ -33,7 +38,7 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
                     "reason_type": "BAD_USERNAME",
                     "reason": "User not found"
                 }
-            })))
+            })));
         }
     };
 
@@ -46,35 +51,44 @@ pub async fn login_route(cookies: Cookies, payload: Json<LoginPayload>) -> Resul
                 "reason_type": "BAD_PASSWORD",
                 "reason": "Incorrect password"
             }
-        })))
+        })));
     }
 
     let token = generate_session_token();
 
+    let mut now = OffsetDateTime::now_utc();
+    now += Duration::days(7);
+
+    let one_week = match NaiveDateTime::from_timestamp_opt(now.unix_timestamp(), 0) {
+        Some(d) => d,
+        None => return Err(anyhow::anyhow!("Failed to create expiration date").into()),
+    };
+
     let session_token = UploadToken {
         user_uuid: user.id,
         token: token.clone(),
-        expiration_date: get_session_expiration().naive_utc(),
+        expiration_date: one_week,
     };
     upload_session_token(session_token.clone()).await;
 
-    let cookie = create_cookie(session_token);
+    let cookie_str = create_cookie(session_token);
+    let mut cookie = Cookie::new(AUTH_TOKEN, token.clone());
+    cookie.set_http_only(true);
+    cookie.set_path("/");
 
-    info!("Created cookie: {}", &cookie);
+    cookie.set_expires(now);
+    cookies.add(cookie);
+
+    info!("Created cookie: {}", &cookie_str);
 
     // Create the success body.
     Ok(Json(json!({
         "result": {
             "success": true,
             "token": token,
-            "cookie": cookie
+            "cookie": cookie_str
         }
     })))
-}
-
-pub fn get_session_expiration() -> DateTime<Utc> {
-    let now = Utc::now();
-    now + Duration::days(7)
 }
 
 pub fn generate_session_token() -> String {

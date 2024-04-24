@@ -4,9 +4,15 @@ members = ["rust_backend", "rust_frontend"]
 
 [workspace.package]
 version = "0.1.0"
-authors = ["Nice Folks"]
-description = "A short description of my package"
-documentation = "https://example.com/bar"
+authors = ["SapraZ, truecrunchyfrog"]
+description = "A Code Grading Platform"
+documentation = "https://github.com/truecrunchyfrog/gymnasiearbete"
+edition = "2021"
+repository = "https://github.com/truecrunchyfrog/gymnasiearbete"
+readme = "README.md"
+license = "GPL-3.0"
+license-file = "LICENSE"
+exclude = ["**/demo_code"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -26,11 +32,3 @@ strip = "symbols"
 
 [profile.dev.build-override]
 opt-level = 3
-
-[term]
-quiet = false          # whether cargo output is quiet
-verbose = false        # whether cargo provides verbose output
-color = 'auto'         # whether cargo colorizes output
-hyperlinks = true      # whether cargo inserts links into output
-progress.when = 'auto' # whether cargo shows progress bar
-progress.width = 80    # width of progress bar

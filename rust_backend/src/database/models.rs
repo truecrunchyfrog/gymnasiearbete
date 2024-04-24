@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 
 use diesel::Insertable;
 use diesel::{sql_types::Nullable, Queryable, Selectable};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Insertable, Queryable)]
@@ -25,46 +25,20 @@ pub struct User {
     pub login_count: Option<i32>,
     pub is_admin: Option<bool>,
 }
-
-#[derive(Insertable, Queryable, Debug)]
+#[derive(Queryable, Insertable, Debug, Deserialize, Serialize)]
 #[diesel(table_name = files)]
-pub struct NewFile {
-    pub file_size: i32,
-    pub file_type: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub last_modified_at: Option<chrono::NaiveDateTime>,
-    pub parent_id: Option<uuid::Uuid>,
-    pub file_content: Option<Vec<u8>>,
-    pub owner_uuid: Uuid,
-}
-
-#[derive(Queryable, Insertable, Debug)]
-#[diesel(table_name = files)]
-pub struct InsertedFile {
-    pub id: uuid::Uuid,
-    pub file_size: i32,
-    pub file_content: Option<Vec<u8>>,
-    pub owner_uuid: uuid::Uuid,
-    pub file_type: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub last_modified_at: Option<chrono::NaiveDateTime>,
-    pub parent_id: Option<uuid::Uuid>,
-}
-
-#[derive(Queryable, Selectable, Insertable, Debug)]
-#[diesel(table_name = files)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
 #[allow(clippy::struct_field_names)]
 pub struct File {
-    pub id: uuid::Uuid,
-
+    pub id: Uuid,
+    pub file_name: String,
+    pub file_hash: String,
     pub file_size: i32,
-    pub file_type: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub last_modified_at: Option<chrono::NaiveDateTime>,
-    pub parent_id: Option<uuid::Uuid>,
-    pub owner_uuid: Uuid,
     pub file_content: Option<Vec<u8>>,
+    pub owner_uuid: Uuid,
+    pub file_type: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub last_modified_at: NaiveDateTime,
+    pub parent_id: Option<Uuid>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
@@ -89,4 +63,19 @@ pub struct NewSessionToken<'a> {
 #[diesel(table_name = session_tokens)]
 pub struct Token<'a> {
     pub token: &'a str,
+}
+
+// Define the struct representing the model
+#[derive(Queryable, Debug, Deserialize, Serialize)]
+#[diesel(table_name = files)]
+pub struct FileMetadata {
+    pub id: Uuid,
+    pub file_hash: String,
+    pub file_size: i32,
+
+    pub owner_uuid: Uuid,
+    pub file_type: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub last_modified_at: NaiveDateTime,
+    pub parent_id: Option<Uuid>,
 }

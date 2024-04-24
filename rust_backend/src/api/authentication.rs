@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::{
     ctx::Ctx,
     database::{self, connection, SessionToken},
-    Error, Result,
+    Error,
 };
 use async_trait::async_trait;
 use axum::{
@@ -23,7 +23,7 @@ use tokio::sync::oneshot::error;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use uuid::Uuid;
 
-async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
+async fn get_new_ctx(token: Option<String>) -> Result<Ctx, Error> {
     let token = token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
     match parse_token(token) {
         Ok(token_id) => {
@@ -45,8 +45,12 @@ async fn get_new_ctx(token: Option<String>) -> Result<Ctx> {
     }
 }
 
-pub async fn mw_require_auth(ctx: Result<Ctx>, req: Request<Body>, next: Next) -> Result<Response> {
-    println!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
+pub async fn mw_require_auth(
+    ctx: Result<Ctx, Error>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, Error> {
+    info!("->> {:<12} - mw_require_auth - {ctx:?}", "MIDDLEWARE");
 
     ctx?;
 
@@ -59,22 +63,24 @@ pub async fn mw_ctx_resolver(
     cookies: Cookies,
     mut req: Request<Body>,
     next: Next,
-) -> Result<Response> {
-    println!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
+) -> Result<Response, Error> {
+    info!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
 
     let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
+
+    info!("Auth token: {:?}", auth_token);
 
     // Compute Result<Ctx>.
     let result_ctx = get_new_ctx(auth_token).await;
 
     // Remove the cookie if something went wrong other than NoAuthTokenCookie.
     if let Err(e) = &result_ctx {
+        error!("Error in mw_ctx_resolver: {:?}", e);
         if !matches!(e, Error::AuthFailNoAuthTokenCookie) {
             cookies.remove(Cookie::from(AUTH_TOKEN));
         }
     }
 
-    // Store the ctx_result in the request extension.
     req.extensions_mut().insert(result_ctx);
 
     Ok(next.run(req).await)
@@ -84,24 +90,25 @@ pub async fn mw_ctx_resolver(
 impl<S: Send + Sync> FromRequestParts<S> for Ctx {
     type Rejection = Error;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Error> {
         println!("->> {:<12} - Ctx", "EXTRACTOR");
 
         parts
             .extensions
-            .get::<Result<Self>>()
+            .get::<Result<Self, Error>>()
             .ok_or(Error::AuthFailCtxNotInRequestExt)?
             .clone()
     }
 }
 
-// Example cookie: sessionToken=abc123; Expires=Wed, 09 Jun 2021 10:18:14 GMT; HttpOnly; Path=/
+// This is stupid, but it's a placeholder for now.
 #[allow(clippy::needless_pass_by_value)]
-fn parse_token(token: String) -> Result<(String)> {
-    info!("Parsing token: {}", token);
-    let re = regex_captures!(r"sessionToken=(?P<token>.+)", &token)
-        .ok_or(Error::AuthFailTokenWrongFormat)?;
-    let fount_token = re.1.to_string();
-
-    Ok(fount_token)
+fn parse_token(token: String) -> Result<(String), Error> {
+    if let Some(index) = token.find('=') {
+        // Return the substring after the '=' sign
+        Ok(token[index + 1..].to_string())
+    } else {
+        // Return the original string if '=' is not found
+        Ok(token)
+    }
 }

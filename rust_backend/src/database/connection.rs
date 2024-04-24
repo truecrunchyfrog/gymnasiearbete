@@ -1,7 +1,8 @@
 use std::env;
 
-use crate::database::models::{InsertedFile, NewFile, NewSessionToken, NewUser, User};
+use crate::database::models::{NewSessionToken, NewUser, User};
 
+use crate::database::{File, FileMetadata};
 use crate::Error;
 use crate::Result;
 use chrono::NaiveDateTime;
@@ -60,7 +61,28 @@ pub async fn create_user(new_user: NewUser) -> Result<Uuid> {
     Ok(new_user.id)
 }
 
-pub async fn upload_file(file: NewFile) -> Result<Uuid> {
+pub async fn get_file_info(file_id: Uuid) -> Result<FileMetadata> {
+    use crate::schema::files::dsl::{files, id};
+    let mut conn = establish_connection();
+
+    let file = files
+        .filter(id.eq(file_id))
+        .first::<File>(&mut conn)
+        .map_err(|err| Error::DatabaseQueryFail)?;
+
+    Ok(FileMetadata {
+        id: file.id,
+        owner_uuid: file.owner_uuid,
+        file_hash: file.file_hash,
+        file_size: file.file_size,
+        file_type: file.file_type,
+        created_at: file.created_at,
+        last_modified_at: file.last_modified_at,
+        parent_id: file.parent_id,
+    })
+}
+
+pub async fn upload_file(file: File) -> Result<Uuid> {
     use crate::schema::files::dsl::files;
     let mut conn = establish_connection();
 
@@ -68,7 +90,7 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid> {
 
     match diesel::insert_into(files)
         .values(file)
-        .get_result::<InsertedFile>(&mut conn)
+        .get_result::<File>(&mut conn)
     {
         Ok(file_id) => {
             info!("{}", file_id.id);
@@ -76,7 +98,7 @@ pub async fn upload_file(file: NewFile) -> Result<Uuid> {
         }
         Err(err) => {
             error!("Error inserting file: {}", err);
-            Err(Error::DatabaseConnectionFail)
+            Err(Error::DatabaseConnectionFail.into())
         }
     }
 }
@@ -101,7 +123,7 @@ pub async fn get_user_from_username(username_query: &str) -> Result<User> {
     users
         .filter(username.eq(username_query))
         .first::<User>(&mut conn)
-        .map_err(|_| Error::DatabaseConnectionFail)
+        .map_err(|_| Error::DatabaseConnectionFail.into())
 }
 
 #[derive(Clone)]
@@ -133,10 +155,10 @@ pub async fn get_user(user_id: Uuid) -> Result<User> {
     use crate::schema::users::dsl::{id, users};
     let mut conn = establish_connection();
 
-    users
+    Ok(users
         .filter(id.eq(user_id))
         .first::<User>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }
 
 // Get the user from the token, return a Result containing a Some(User) if the token is valid, None otherwise.
@@ -153,7 +175,7 @@ pub async fn get_token_owner(token_str: &String) -> Result<Option<User>> {
     let user = get_user(result).await?;
 
     if user.id == Uuid::nil() {
-        return Ok(None)
+        return Ok(None);
     }
 
     Ok(Some(user))
@@ -163,19 +185,19 @@ pub async fn get_files_from_user(user_id: Uuid) -> Result<Vec<Uuid>> {
     use crate::schema::files::dsl::{files, id, owner_uuid};
     let mut conn = establish_connection();
 
-    files
+    Ok(files
         .filter(owner_uuid.eq(user_id))
         .select(id)
         .load::<Uuid>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }
 
-pub async fn get_file_from_id(file_id: Uuid) -> Result<InsertedFile> {
+pub async fn get_file_from_id(file_id: Uuid) -> Result<File> {
     use crate::schema::files::dsl::{files, id};
     let mut conn = establish_connection();
 
-    files
+    Ok(files
         .filter(id.eq(file_id))
-        .first::<InsertedFile>(&mut conn)
-        .map_err(|err| Error::DatabaseQueryFail)
+        .first::<File>(&mut conn)
+        .map_err(|err| Error::DatabaseQueryFail)?)
 }

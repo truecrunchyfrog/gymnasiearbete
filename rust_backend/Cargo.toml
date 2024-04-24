@@ -2,6 +2,9 @@
 name = "rust_backend"
 edition = "2021"
 version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,7 +25,7 @@ diesel = { version = "2.1.4", features = [
 ] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 dotenv = "0.15.0"
-env_logger = "0.10.0"
+env_logger = "0.11.2"
 futures = "0.3.28"
 http = "1.0.0"
 hyper = "1.0.1"
@@ -32,7 +35,7 @@ rand = "0.8.5"
 regex = "1.10.2"
 serde = "1.0.188"
 serde_json = "1.0.108"
-strum_macros = "0.25.3"
+strum_macros = "0.26.1"
 tar = "0.4.40"
 tempfile = "3.9.0"
 tokio = { version = "1.32.0", features = ["full"] }
@@ -47,6 +50,17 @@ derived = "0.4.2"
 tempdir = "0.3.7"
 maplit = "1.0.2"
 tokio-stream = { version = "0.1.14", features = ["fs"] }
+flate2 = "1.0.28"
+easing = "0.0.5"
+md5 = "0.7.0"
 
 [dev-dependencies]
 httpc-test = "0.1.8"
+
+[term]
+quiet = false          # whether cargo output is quiet
+verbose = false        # whether cargo provides verbose output
+color = 'auto'         # whether cargo colorizes output
+hyperlinks = true      # whether cargo inserts links into output
+progress.when = 'auto' # whether cargo shows progress bar
+progress.width = 80    # width of progress bar
